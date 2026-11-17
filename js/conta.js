@@ -1,4 +1,4 @@
-import { $, $$, esc, api, auth, chat, refreshUnread, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML } from './core.js';
+import { $, $$, esc, api, auth, chat, refreshUnread, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML, visitas, VISITA_STATUS, buscas, matchFiltros, filtrosLabel, isPublicado, SITUACOES, ETAPAS, loadLeaflet, tileLayer, geocode, num } from './core.js';
 
 renderChrome('anunciar');
 const root = $('#conta');
@@ -19,6 +19,7 @@ function renderLogin() {
           <div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div>
           <div class="field"><label>Senha</label><input type="password" name="senha" required autocomplete="current-password"></div>
           <button class="btn" type="submit" style="margin-top:.2rem">Entrar</button>
+          <button type="button" class="muted" id="forgot" style="font-size:.84rem;text-decoration:underline;justify-self:center">Esqueci minha senha</button>
         </form>
       </details>
       <p class="muted" style="font-size:.78rem;margin-top:1.2rem">${DEMO ? 'Modo demonstração: você entra como administrador fictício.' : 'Usamos apenas seu nome, e-mail e foto do Google.'}</p>
@@ -31,12 +32,52 @@ function renderLogin() {
     try { await signInWithPassword(e.target.email.value.trim(), e.target.senha.value); }
     catch (err) { toast(err.message, 'err'); b.disabled = false; }
   };
+  $('#forgot').onclick = () => {
+    const { el, close } = modal(`
+      <h3 style="font-size:1.6rem;margin-bottom:.4rem">Recuperar senha</h3>
+      <p class="muted" style="margin-top:0">Enviamos um link para você criar uma senha nova. Se você só entra com o Google, use o botão do Google — não precisa de senha.</p>
+      <form class="form" id="fg-form"><div class="field"><label>E-mail da conta</label><input type="email" id="fg-email" required autocomplete="email" value="${esc($('#pw-login').email.value)}"></div>
+      <button class="btn btn-accent" type="submit">Enviar link</button></form>`);
+    el.querySelector('#fg-form').onsubmit = async (ev) => {
+      ev.preventDefault();
+      const btn = ev.target.querySelector('button'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Enviando…';
+      try {
+        await api.resetPassword(el.querySelector('#fg-email').value.trim());
+        el.querySelector('.modal-box').innerHTML = `<h3 style="font-size:1.6rem;margin-bottom:.4rem">Confira seu e-mail</h3><p class="muted">Se existir uma conta com esse endereço, você vai receber um link em instantes. Ele abre esta página para você definir a senha nova.</p><button class="btn" style="margin-top:1rem" onclick="this.closest('.modal').click()">Entendi</button>`;
+      } catch (err) { toast(err.message, 'err'); btn.disabled = false; btn.textContent = 'Enviar link'; }
+    };
+  };
 }
+
+// Link de recuperação de senha: o Supabase devolve logado com o evento PASSWORD_RECOVERY
+function recoveryModal() {
+  if (document.querySelector('#rc-form')) return;
+  const { el, close } = modal(`
+    <h3 style="font-size:1.6rem;margin-bottom:.4rem">Crie sua nova senha</h3>
+    <p class="muted" style="margin-top:0">Você entrou pelo link de recuperação. Defina a senha nova abaixo.</p>
+    <form class="form" id="rc-form">
+      <div class="field"><label>Nova senha</label><input type="password" id="rc-1" minlength="8" required autocomplete="new-password"></div>
+      <div class="field"><label>Confirmar</label><input type="password" id="rc-2" minlength="8" required autocomplete="new-password"></div>
+      <button class="btn btn-accent" type="submit">Salvar nova senha</button>
+    </form>`);
+  el.querySelector('#rc-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const a = el.querySelector('#rc-1').value, b = el.querySelector('#rc-2').value;
+    if (a.length < 8) return toast('Mínimo de 8 caracteres.', 'err');
+    if (a !== b) return toast('As senhas não conferem.', 'err');
+    try { await api.changePassword(a); auth.recovery = false; close(); toast('Senha atualizada! Você já está conectado.'); }
+    catch (err) { toast(err.message, 'err'); }
+  };
+}
+addEventListener('alvar:recovery', recoveryModal);
 
 const TABS = [
   { id: 'perfil', label: 'Perfil', ic: 'user' },
   { id: 'chat', label: 'Mensagens', ic: 'chat' },
+  { id: 'visitas', label: 'Visitas', ic: 'calendar' },
   { id: 'favoritos', label: 'Favoritos', ic: 'heart', count: () => favs.size },
+  { id: 'buscas', label: 'Buscas salvas', ic: 'bell' },
+  { id: 'painel', label: 'Painel', ic: 'chart', staff: true },
   { id: 'imoveis', label: 'Meus imóveis', ic: 'grid', staff: true },
   { id: 'novo', label: 'Cadastrar imóvel', ic: 'plus', staff: true },
   { id: 'leads', label: 'Interessados', ic: 'inbox', staff: true },
@@ -61,16 +102,35 @@ function renderShell() {
     </div>`;
   $$('.side-nav button').forEach((b) => b.onclick = () => { history.replaceState(null, '', (b.dataset.tab === 'novo' ? location.pathname : location.pathname + location.search) + '#' + b.dataset.tab); route(); });
   observeReveal(root);
+  refreshCounts();
+}
+
+// Números ao lado das abas (visitas a confirmar, anúncios a aprovar, novidades nas buscas)
+function setCount(tab, n) {
+  const btn = $(`.side-nav [data-tab="${tab}"]`); if (!btn) return;
+  let c = btn.querySelector('.count');
+  if (!n) { c?.remove(); return; }
+  if (!c) { c = document.createElement('span'); c.className = 'count'; btn.append(c); }
+  c.textContent = n;
+}
+async function refreshCounts() {
+  const me = auth.user.id;
+  try { const v = await visitas.list(); setCount('visitas', v.filter((x) => x.corretor_id === me && x.status === 'pendente' && new Date(x.data_hora) > new Date()).length); } catch {}
+  try {
+    const [bs, all] = await Promise.all([buscas.list(), loadImoveis()]);
+    setCount('buscas', bs.reduce((n, b) => n + all.filter((i) => isPublicado(i) && matchFiltros(b.filtros || {}, i) && i.created_at > b.visto_em).length, 0));
+    if (isAdmin()) setCount('imoveis', all.filter((i) => i.situacao === 'pendente').length);
+  } catch {}
 }
 
 function route() {
   let id = location.hash.slice(1) || 'perfil';
-  const staffOnly = ['imoveis', 'novo', 'leads'];
+  const staffOnly = ['imoveis', 'novo', 'leads', 'painel'];
   if ((staffOnly.includes(id) && !isStaff()) || (id === 'equipe' && !isAdmin())) id = 'restrito';
   if (!$('#tab-' + id)) id = 'perfil';
   $$('.side-nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === id));
   $$('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + id));
-  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca, chat: tabChat })[id]?.();
+  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca, chat: tabChat, visitas: tabVisitas, buscas: tabBuscas, painel: tabPainel })[id]?.();
   if (id !== 'chat' && stopChat) { stopChat(); stopChat = null; }
 }
 
@@ -126,35 +186,58 @@ async function tabFavoritos() {
 
 async function tabImoveis() {
   const t = $('#tab-imoveis');
-  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">${isAdmin() ? 'Todos os anúncios' : 'Sob sua responsabilidade'}</span><h2>Imóveis</h2></div><label class="field-inline" style="border:1px solid var(--line);min-width:240px">${icon('search')}<input id="mi-q" placeholder="Filtrar…"></label></div><div class="list" id="mi-list"><div class="skeleton" style="height:100px"></div></div>`;
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">${isAdmin() ? 'Todos os anúncios' : 'Sob sua responsabilidade'}</span><h2>Imóveis</h2></div><label class="field-inline" style="border:1px solid var(--line);min-width:240px">${icon('search')}<input id="mi-q" placeholder="Filtrar…"></label></div><div class="filter-chips" id="mi-sit"></div><div class="list" id="mi-list"><div class="skeleton" style="height:100px"></div></div>`;
   try {
     const all = await loadImoveis(true);
     const mine = isAdmin() ? all : all.filter((i) => i.responsavel_id === auth.user.id || i.criado_por === auth.user.id);
-    const draw = (q = '') => {
-      const l = mine.filter((i) => (i.titulo + i.bairro + i.cidade).toLowerCase().includes(q.toLowerCase()));
+    const sit = (i) => i.situacao || 'publicado';
+    let fSit = isAdmin() && mine.some((i) => sit(i) === 'pendente') ? 'pendente' : '';
+    let q = '';
+    const chips = () => {
+      const c = (k) => mine.filter((i) => !k || sit(i) === k).length;
+      $('#mi-sit').innerHTML = [['', 'Todos'], ['pendente', 'Aguardando aprovação'], ['publicado', 'Publicados'], ['rascunho', 'Rascunhos'], ['rejeitado', 'Rejeitados']]
+        .filter(([k]) => !k || c(k)).map(([k, l]) => `<button class="chip ${fSit === k ? 'on' : ''}" data-s="${k}">${l}<small>${c(k)}</small></button>`).join('');
+      $$('#mi-sit [data-s]').forEach((b) => b.onclick = () => { fSit = b.dataset.s; chips(); draw(); });
+    };
+    const draw = () => {
+      const l = mine.filter((i) => (!fSit || sit(i) === fSit) && (i.titulo + i.bairro + i.cidade).toLowerCase().includes(q.toLowerCase()));
       $('#mi-list').innerHTML = l.length ? l.map((im) => `
         <div class="list-item">
           <img src="${esc(cover(im))}" alt="" data-fb loading="lazy">
           <div style="min-width:0">
-            <h4>${esc(im.titulo)}</h4>
+            <h4>${esc(im.titulo)} <span class="pill ${sit(im)}">${SITUACOES[sit(im)]}</span></h4>
             <div class="meta"><span>${priceLabel(im)}</span><span>${TIPOS[im.tipo] || ''} · ${FINALIDADES[im.finalidade] || ''}</span><span class="status ${im.status}">${STATUS[im.status] || ''}</span>${im.destaque ? `<span style="color:var(--accent)">★ Destaque</span>` : ''}</div>
-            <div class="meta"><span>${icon('pin')} ${loc(im)}</span><span>${icon('image')} ${im.imovel_fotos?.length || 0}</span><span>${icon('user')} ${esc(im.responsavel?.nome || '—')}</span></div>
+            <div class="meta"><span>${icon('pin')} ${loc(im)}</span><span>${icon('image')} ${im.imovel_fotos?.length || 0}</span><span>${icon('user')} ${esc(im.responsavel?.nome || '—')}</span>${im.latitude ? `<span>${icon('map')} no mapa</span>` : ''}</div>
+            ${sit(im) === 'rejeitado' && im.motivo_rejeicao ? `<div class="meta" style="color:var(--danger)">Motivo: ${esc(im.motivo_rejeicao)}</div>` : ''}
           </div>
           <div class="row-actions">
+            ${isAdmin() && sit(im) === 'pendente' ? `<button class="btn btn-sm" data-ok="${esc(im.id)}">${icon('check')} Aprovar</button><button class="btn btn-ghost btn-sm" data-rej="${esc(im.id)}">Rejeitar</button>` : ''}
             <a class="btn-icon" href="./imovel.html?id=${encodeURIComponent(im.id)}" aria-label="Ver">${icon('eye')}</a>
             <a class="btn-icon" href="?editar=${encodeURIComponent(im.id)}#novo" aria-label="Editar">${icon('edit')}</a>
             <button class="btn-icon" data-del="${esc(im.id)}" aria-label="Excluir">${icon('trash')}</button>
           </div>
-        </div>`).join('') : `<div class="empty"><h3>Nenhum imóvel</h3><p>Cadastre o primeiro agora mesmo.</p><a class="btn btn-accent" href="#novo" style="margin-top:1rem">${icon('plus')} Cadastrar imóvel</a></div>`;
+        </div>`).join('') : `<div class="empty"><h3>Nenhum imóvel ${fSit ? 'nesta situação' : ''}</h3><p>${fSit ? 'Troque o filtro acima.' : 'Cadastre o primeiro agora mesmo.'}</p>${fSit ? '' : `<a class="btn btn-accent" href="#novo" style="margin-top:1rem">${icon('plus')} Cadastrar imóvel</a>`}</div>`;
       imgFallback($('#mi-list'));
       $$('[data-del]').forEach((b) => b.onclick = async () => {
         const im = mine.find((x) => x.id === b.dataset.del);
         if (!(await confirmBox(`“${im.titulo}” e todas as fotos serão excluídos permanentemente.`, 'Excluir'))) return;
         try { await api.deleteImovel(im); toast('Imóvel excluído'); tabImoveis(); } catch (e) { toast(e.message, 'err'); }
       });
+      $$('[data-ok]').forEach((b) => b.onclick = async () => {
+        try { await api.setSituacao(b.dataset.ok, 'publicado'); toast('Anúncio aprovado e publicado!'); IMOVEIS = null; tabImoveis(); refreshCounts(); } catch (e) { toast(e.message, 'err'); }
+      });
+      $$('[data-rej]').forEach((b) => b.onclick = () => {
+        const { el, close } = modal(`<h3 style="font-size:1.5rem;margin-bottom:.5rem">Rejeitar anúncio</h3><p class="muted" style="margin-top:0">Explique ao corretor o que ajustar. Ele vê o motivo e pode reenviar.</p>
+          <div class="field"><textarea id="rej-m" style="min-height:100px" maxlength="400" placeholder="Ex.: faltam fotos da cozinha e o preço está desatualizado."></textarea></div>
+          <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:1rem"><button class="btn btn-ghost" data-no>Cancelar</button><button class="btn btn-danger" data-yes>Rejeitar</button></div>`);
+        el.querySelector('[data-no]').onclick = close;
+        el.querySelector('[data-yes]').onclick = async () => {
+          try { await api.setSituacao(b.dataset.rej, 'rejeitado', el.querySelector('#rej-m').value.trim() || null); close(); toast('Anúncio rejeitado'); IMOVEIS = null; tabImoveis(); refreshCounts(); } catch (e) { toast(e.message, 'err'); }
+        };
+      });
     };
-    draw();
-    $('#mi-q').oninput = (e) => draw(e.target.value);
+    chips(); draw();
+    $('#mi-q').oninput = (e) => { q = e.target.value; draw(); };
   } catch (e) { $('#mi-list').innerHTML = dbErrorHTML(e); }
 }
 
@@ -179,6 +262,8 @@ async function tabNovo() {
 
   t.innerHTML = `
     <div class="tab-head"><div><span class="eyebrow">${im ? 'Editar anúncio' : 'Novo anúncio'}</span><h2>${im ? esc(im.titulo) : 'Cadastrar imóvel'}</h2></div>${im ? `<a class="btn btn-ghost btn-sm" href="${location.pathname}#novo" id="nv-new">${icon('plus')} Novo em branco</a>` : ''}</div>
+    ${im && im.situacao === 'rejeitado' ? `<div class="draft-banner" style="border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:color-mix(in srgb,var(--danger) 10%,transparent)">${icon('x')}<span><b>Anúncio rejeitado.</b> ${esc(im.motivo_rejeicao || 'Ajuste e reenvie para aprovação.')}</span></div>` : ''}
+    ${im && im.situacao === 'pendente' ? `<div class="draft-banner">${icon('clock')}<span>Este anúncio está <b>aguardando aprovação</b> de um administrador.</span></div>` : ''}
     <form class="form" id="f-imovel" novalidate>
       <div class="panel form">
         <h3 style="font-size:1.3rem">Informações principais</h3>
@@ -223,6 +308,12 @@ async function tabNovo() {
           <div class="field"><label>Cidade *</label><input name="cidade" required value="${val('cidade')}"></div>
           <div class="field"><label>UF</label><input name="estado" maxlength="2" value="${val('estado')}"></div>
         </div>
+        <div class="field">
+          <div style="display:flex;justify-content:space-between;align-items:end;gap:.6rem;flex-wrap:wrap"><label>Posição no mapa <span id="geo-st" style="font-weight:400">${v.latitude ? '· definida' : '· não definida'}</span></label><button type="button" class="btn btn-ghost btn-sm" id="geo-btn">${icon('pin')} Localizar pelo endereço</button></div>
+          <div class="mini-map" id="mini-map"></div>
+          <p class="muted" style="font-size:.8rem;margin:.2rem 0 0">Clique no mapa ou arraste o marcador para ajustar. É o que aparece na busca por mapa.</p>
+          <input type="hidden" name="latitude" value="${val('latitude')}"><input type="hidden" name="longitude" value="${val('longitude')}">
+        </div>
       </div>
 
       <div class="panel form">
@@ -237,9 +328,10 @@ async function tabNovo() {
         <p class="muted" style="font-size:.85rem;margin:0">Ele aparece na página do imóvel e recebe os interessados.</p>
       </div>
 
-      <div style="display:flex;gap:.6rem;justify-content:flex-end;position:sticky;bottom:1rem;z-index:5">
+      <div class="form-actions">
         <a class="btn btn-ghost" href="#imoveis" style="background:var(--surface)">Cancelar</a>
-        <button class="btn btn-accent" type="submit" id="save-btn">${icon('check')} ${im ? 'Salvar alterações' : 'Publicar imóvel'}</button>
+        <button class="btn btn-ghost" type="submit" data-sit="rascunho" style="background:var(--surface)">Salvar rascunho</button>
+        <button class="btn btn-accent" type="submit" data-sit="publicado" id="save-btn">${icon('check')} ${isAdmin() ? (im && im.situacao === 'publicado' ? 'Salvar alterações' : 'Publicar imóvel') : (im && im.situacao === 'publicado' ? 'Salvar alterações' : 'Enviar para aprovação')}</button>
       </div>
     </form>`;
 
@@ -257,6 +349,7 @@ async function tabNovo() {
       if (!form.endereco.value) form.endereco.value = r.logradouro ? r.logradouro + ', ' : '';
       form.bairro.value = r.bairro || form.bairro.value; form.cidade.value = r.localidade || form.cidade.value; form.estado.value = r.uf || form.estado.value;
       toast('Endereço preenchido pelo CEP');
+      if (!form.latitude.value) $('#geo-btn').click();
     } catch {}
   });
 
@@ -306,6 +399,7 @@ async function tabNovo() {
   // Salvar
   form.onsubmit = async (e) => {
     e.preventDefault();
+    const situacao = e.submitter?.dataset.sit || 'publicado';
     const fd = new FormData(form);
     const n = (k) => (fd.get(k) === '' || fd.get(k) === null ? null : Number(fd.get(k)));
     const titulo = String(fd.get('titulo') || '').trim();
@@ -319,42 +413,228 @@ async function tabNovo() {
       descricao: String(fd.get('descricao') || '').trim(), comodidades,
       cep: String(fd.get('cep') || '').trim(), endereco: String(fd.get('endereco') || '').trim(), bairro: String(fd.get('bairro') || '').trim(), cidade, estado: String(fd.get('estado') || '').trim().toUpperCase(),
       responsavel_id: fd.get('responsavel_id') || auth.user.id,
+      latitude: n('latitude'), longitude: n('longitude'),
+      situacao: situacao === 'rascunho' ? 'rascunho' : (isAdmin() ? 'publicado' : (im?.situacao === 'publicado' ? 'publicado' : 'pendente')),
     };
-    const btn = $('#save-btn'); btn.disabled = true;
+    const btn = e.submitter || $('#save-btn'); $$('.form-actions button').forEach((b) => b.disabled = true);
     btn.innerHTML = '<span class="spinner"></span> Salvando dados…';
     try {
       const id = await api.saveImovel(payload, im?.id || null);
       await api.saveFotos(id, fotos, removidas, (i, tot) => { btn.innerHTML = `<span class="spinner"></span> Enviando foto ${i}/${tot}…`; });
-      toast(im ? 'Alterações salvas!' : 'Imóvel publicado!');
+      toast(payload.situacao === 'rascunho' ? 'Rascunho salvo.' : payload.situacao === 'pendente' ? 'Enviado para aprovação! Avisaremos quando for publicado.' : (im ? 'Alterações salvas!' : 'Imóvel publicado!'));
       setTimeout(() => location.href = `./imovel.html?id=${encodeURIComponent(id)}`, 700);
     } catch (err) {
       console.error(err);
       toast(err.message || 'Erro ao salvar', 'err');
-      btn.disabled = false; btn.innerHTML = `${icon('check')} Tentar novamente`;
+      $$('.form-actions button').forEach((b) => b.disabled = false); btn.innerHTML = `${icon('check')} Tentar novamente`;
     }
   };
+
+  // Mapa do formulário
+  let mm = null, mk = null;
+  const setPos = (lat, lng, pan = true) => {
+    form.latitude.value = lat.toFixed(6); form.longitude.value = lng.toFixed(6);
+    $('#geo-st').textContent = '· definida';
+    if (!mm) return;
+    if (!mk) { mk = window.L.marker([lat, lng], { draggable: true }).addTo(mm); mk.on('dragend', () => { const p = mk.getLatLng(); setPos(p.lat, p.lng, false); }); }
+    else mk.setLatLng([lat, lng]);
+    if (pan) mm.setView([lat, lng], 16);
+  };
+  loadLeaflet().then((L) => {
+    const lat = Number(v.latitude), lng = Number(v.longitude);
+    mm = L.map('mini-map', { scrollWheelZoom: false }).setView(lat ? [lat, lng] : [-25.52, -48.51], lat ? 16 : 12);
+    tileLayer(L).addTo(mm);
+    if (lat) setPos(lat, lng);
+    mm.on('click', (e) => setPos(e.latlng.lat, e.latlng.lng, false));
+  }).catch(() => { $('#mini-map').innerHTML = '<p class="muted" style="padding:1rem">Não foi possível carregar o mapa.</p>'; });
+  const localizar = async (silencioso = false) => {
+    const q = [form.endereco.value, form.bairro.value, form.cidade.value, form.estado.value, 'Brasil'].filter((x) => x && x.trim()).join(', ');
+    if (!form.cidade.value.trim()) { if (!silencioso) toast('Preencha ao menos a cidade.', 'err'); return; }
+    const b = $('#geo-btn'); b.disabled = true;
+    try {
+      let r = await geocode(q);
+      if (!r) r = await geocode([form.bairro.value, form.cidade.value, form.estado.value, 'Brasil'].filter(Boolean).join(', '));
+      if (r) { setPos(r.lat, r.lng); if (!silencioso) toast('Posição encontrada — ajuste o marcador se precisar.'); }
+      else if (!silencioso) toast('Endereço não encontrado. Clique no mapa para marcar.', 'err');
+    } catch { if (!silencioso) toast('Busca de endereço indisponível agora.', 'err'); }
+    b.disabled = false;
+  };
+  $('#geo-btn').onclick = () => localizar(false);
+  form.cidade.addEventListener('change', () => { if (!form.latitude.value) localizar(true); });
 }
 
 // ---------------------------------------------------------
 async function tabLeads() {
   const t = $('#tab-leads');
-  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Contatos recebidos</span><h2>Interessados</h2></div></div><div id="leads-box"><div class="skeleton" style="height:200px"></div></div>`;
-  try {
-    const leads = await api.listLeads();
-    $('#leads-box').innerHTML = leads.length ? `<div class="table-wrap"><table>
-      <thead><tr><th>Data</th><th>Pessoa</th><th>Imóvel</th><th>Mensagem</th><th></th></tr></thead>
-      <tbody>${leads.map((l) => {
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Contatos recebidos</span><h2>Interessados</h2></div></div><div class="filter-chips" id="et-chips"></div><div id="leads-box"><div class="skeleton" style="height:200px"></div></div>`;
+  let leads;
+  try { leads = await api.listLeads(); } catch (e) { $('#leads-box').innerHTML = dbErrorHTML(e); return; }
+  leads.forEach((l) => { l.etapa ||= 'novo'; });
+  let fEt = '';
+  const chips = () => {
+    const c = (k) => leads.filter((l) => !k || l.etapa === k).length;
+    $('#et-chips').innerHTML = [['', 'Todos'], ...Object.entries(ETAPAS)].map(([k, lbl]) => `<button class="chip ${fEt === k ? 'on' : ''}" data-e="${k}">${lbl}<small>${c(k)}</small></button>`).join('');
+    $$('#et-chips [data-e]').forEach((b) => b.onclick = () => { fEt = b.dataset.e; chips(); draw(); });
+  };
+  const draw = () => {
+    const list = leads.filter((l) => !fEt || l.etapa === fEt);
+    $('#leads-box').innerHTML = list.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Data</th><th>Pessoa</th><th>Imóvel</th><th>Mensagem</th><th>Etapa</th><th></th></tr></thead>
+      <tbody>${list.map((l) => {
         const tel = onlyDigits(l.telefone);
         return `<tr>
           <td style="white-space:nowrap">${fmtDate(l.created_at)}</td>
           <td><strong>${esc(l.nome)}</strong><br><a class="muted" href="mailto:${esc(l.email)}">${esc(l.email)}</a>${tel ? `<br><a class="muted" href="https://wa.me/${tel.startsWith('55') ? tel : '55' + tel}" target="_blank" rel="noopener">${esc(l.telefone)}</a>` : ''}</td>
           <td>${l.imovel ? `<a href="./imovel.html?id=${encodeURIComponent(l.imovel.id)}" style="color:var(--accent)">${esc(l.imovel.titulo)}</a>` : '<span class="muted">removido</span>'}</td>
-          <td style="max-width:320px">${esc(l.mensagem)}</td>
+          <td style="max-width:300px">${esc(l.mensagem)}</td>
+          <td><select class="select" data-et="${esc(l.id)}" aria-label="Etapa">${Object.entries(ETAPAS).map(([k, lbl]) => `<option value="${k}" ${l.etapa === k ? 'selected' : ''}>${lbl}</option>`).join('')}</select></td>
           <td><button class="btn-icon" data-dl="${esc(l.id)}" aria-label="Excluir">${icon('trash')}</button></td>
         </tr>`;
-      }).join('')}</tbody></table></div>` : `<div class="empty"><h3>Nenhum interessado ainda</h3><p>Quando alguém clicar em “Tenho interesse” num imóvel seu, aparece aqui.</p></div>`;
+      }).join('')}</tbody></table></div>` : `<div class="empty"><h3>${fEt ? 'Ninguém nesta etapa' : 'Nenhum interessado ainda'}</h3><p>${fEt ? 'Troque o filtro acima.' : 'Quando alguém clicar em “Tenho interesse” num imóvel seu, aparece aqui.'}</p></div>`;
+    $$('[data-et]').forEach((sel) => sel.onchange = async () => {
+      const l = leads.find((x) => x.id === sel.dataset.et);
+      try { await api.setLeadEtapa(l.id, sel.value); l.etapa = sel.value; chips(); toast(`Etapa: ${ETAPAS[sel.value]}`); if (fEt) draw(); }
+      catch (e) { toast(e.message, 'err'); sel.value = l.etapa; }
+    });
     $$('[data-dl]').forEach((b) => b.onclick = async () => { if (!(await confirmBox('Remover este contato da lista?', 'Remover'))) return; try { await api.deleteLead(b.dataset.dl); tabLeads(); } catch (e) { toast(e.message, 'err'); } });
-  } catch (e) { $('#leads-box').innerHTML = dbErrorHTML(e); }
+  };
+  chips(); draw();
+}
+
+// ---------------------------------------------------------
+//  Visitas
+// ---------------------------------------------------------
+async function tabVisitas() {
+  const t = $('#tab-visitas');
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Agenda</span><h2>Visitas</h2></div></div><div id="vis-box"><div class="skeleton" style="height:120px"></div></div>`;
+  let list;
+  try { list = await visitas.list(); } catch (e) { $('#vis-box').innerHTML = dbErrorHTML(e); return; }
+  const me = auth.user.id, agora = new Date();
+  const card = (v, papel) => {
+    const d = new Date(v.data_hora), past = d < agora;
+    const outro = papel === 'corretor' ? v.cliente : v.corretor;
+    const tel = onlyDigits(outro?.telefone);
+    const acts = [];
+    if (papel === 'corretor' && v.status === 'pendente' && !past) acts.push(`<button class="btn btn-sm" data-st="confirmada" data-v="${esc(v.id)}">${icon('check')} Confirmar</button>`, `<button class="btn btn-ghost btn-sm" data-st="recusada" data-v="${esc(v.id)}">Recusar</button>`);
+    if (papel === 'corretor' && v.status === 'confirmada' && past) acts.push(`<button class="btn btn-sm" data-st="realizada" data-v="${esc(v.id)}">Marcar realizada</button>`);
+    if (['pendente', 'confirmada'].includes(v.status) && !past) acts.push(`<button class="btn btn-ghost btn-sm" data-st="cancelada" data-v="${esc(v.id)}">Cancelar</button>`);
+    if (v.imovel && outro && papel === 'cliente') acts.push(`<button class="btn-icon" data-chat="${esc(v.imovel.id)}" aria-label="Conversar">${icon('chat')}</button>`);
+    if (tel && papel === 'corretor') acts.push(`<a class="btn-icon" href="https://wa.me/${tel.startsWith('55') ? tel : '55' + tel}" target="_blank" rel="noopener" aria-label="WhatsApp">${icon('phone')}</a>`);
+    return `<div class="panel visit-card ${past || ['cancelada', 'recusada'].includes(v.status) ? 'past' : ''}">
+      <div class="visit-date"><small>${d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</small><b>${d.getDate()}</b><span>${d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')} · ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span></div>
+      <div style="min-width:0">
+        <h4>${v.imovel ? `<a href="./imovel.html?id=${encodeURIComponent(v.imovel.id)}">${esc(v.imovel.titulo)}</a>` : 'Imóvel removido'}</h4>
+        <div class="meta"><span class="pill ${v.status}">${VISITA_STATUS[v.status]}</span>${v.imovel ? `<span>${icon('pin')} ${loc(v.imovel)}</span>` : ''}<span>${icon('user')} ${papel === 'corretor' ? 'Interessado' : 'Corretor'}: ${esc(outro?.nome || '—')}</span></div>
+        ${v.observacao ? `<div class="meta">“${esc(v.observacao)}”</div>` : ''}
+      </div>
+      <div class="row-actions">${acts.join('')}</div>
+    </div>`;
+  };
+  const ord = (a, b) => { const fa = new Date(a.data_hora) < agora, fb = new Date(b.data_hora) < agora; return fa !== fb ? (fa ? 1 : -1) : (fa ? b.data_hora.localeCompare(a.data_hora) : a.data_hora.localeCompare(b.data_hora)); };
+  const comoCorretor = list.filter((v) => v.corretor_id === me || (isAdmin() && v.cliente_id !== me)).sort(ord);
+  const comoCliente = list.filter((v) => v.cliente_id === me).sort(ord);
+  $('#vis-box').innerHTML = (!list.length ? `<div class="empty"><h3>Nenhuma visita agendada</h3><p>Abra um imóvel e use <b>Agendar visita</b> para escolher dia e horário.</p><a class="btn" href="./index.html#catalogo" style="margin-top:1rem">Ver imóveis</a></div>` : '')
+    + (comoCorretor.length ? `<h3 class="sub-title">Pedidos nos seus imóveis</h3><div class="list">${comoCorretor.map((v) => card(v, 'corretor')).join('')}</div>` : '')
+    + (comoCliente.length ? `<h3 class="sub-title">Suas visitas</h3><div class="list">${comoCliente.map((v) => card(v, 'cliente')).join('')}</div>` : '');
+  $$('[data-st]', t).forEach((b) => b.onclick = async () => {
+    const st = b.dataset.st;
+    if (['cancelada', 'recusada'].includes(st) && !(await confirmBox(st === 'cancelada' ? 'Cancelar esta visita?' : 'Recusar este pedido de visita?', st === 'cancelada' ? 'Cancelar visita' : 'Recusar'))) return;
+    try {
+      await visitas.setStatus(b.dataset.v, st);
+      const v = list.find((x) => x.id === b.dataset.v);
+      const msg = { confirmada: '✅ Visita confirmada', recusada: '❌ Não poderei receber a visita neste horário — que tal escolher outro?', cancelada: '🚫 Visita cancelada', realizada: '🏠 Visita realizada. Obrigado!' }[st];
+      if (v?.imovel && msg) {
+        try {
+          const convs = await chat.list();
+          const c = convs.find((x) => x.imovel_id === v.imovel.id && x.cliente_id === v.cliente_id);
+          if (c) await chat.send(c.id, `${msg} — ${new Date(v.data_hora).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`);
+        } catch {}
+      }
+      toast(VISITA_STATUS[st]); tabVisitas(); refreshCounts();
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  $$('[data-chat]', t).forEach((b) => b.onclick = async () => { try { const id = await chat.open(b.dataset.chat); if (id) { history.replaceState(null, '', `${location.pathname}?c=${encodeURIComponent(id)}#chat`); route(); } } catch (e) { toast(e.message, 'err'); } });
+}
+
+// ---------------------------------------------------------
+//  Buscas salvas
+// ---------------------------------------------------------
+async function tabBuscas() {
+  const t = $('#tab-buscas');
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Alertas</span><h2>Buscas salvas</h2></div><a class="btn btn-ghost btn-sm" href="./index.html#catalogo">${icon('search')} Nova busca</a></div><div id="bs-box"><div class="skeleton" style="height:100px"></div></div>`;
+  let bs, all;
+  try { [bs, all] = await Promise.all([buscas.list(), loadImoveis()]); } catch (e) { $('#bs-box').innerHTML = dbErrorHTML(e); return; }
+  all = all.filter(isPublicado);
+  const url = (f) => { const p = new URLSearchParams(); Object.entries(f).forEach(([k, v]) => { if (v && v !== '0' && v !== 0) p.set(k === 'fin' ? 'f' : k, v); }); return `./index.html?${p}#catalogo`; };
+  $('#bs-box').innerHTML = bs.length ? `<div class="list">${bs.map((b) => {
+    const f = b.filtros || {};
+    const res = all.filter((i) => matchFiltros(f, i));
+    const novos = res.filter((i) => i.created_at > b.visto_em).length;
+    return `<div class="panel busca-card">
+      <div style="min-width:0">
+        <h4>${esc(b.nome)} ${novos ? `<span class="pill novo">${novos} ${novos === 1 ? 'novo' : 'novos'}</span>` : ''}</h4>
+        <div class="chips-sm">${filtrosLabel(f).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
+        <div class="muted" style="font-size:.82rem;margin-top:.5rem">${res.length} ${res.length === 1 ? 'imóvel combina' : 'imóveis combinam'} agora · salva em ${fmtDate(b.created_at)}</div>
+      </div>
+      <div class="row-actions" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+        <label class="switch" title="Alertas por e-mail"><input type="checkbox" data-al="${esc(b.id)}" ${b.alerta_email ? 'checked' : ''}> <span style="font-size:.84rem">E-mail</span></label>
+        <a class="btn btn-sm" href="${url(f)}" data-ver="${esc(b.id)}">Ver resultados</a>
+        <button class="btn-icon" data-rm="${esc(b.id)}" aria-label="Excluir">${icon('trash')}</button>
+      </div>
+    </div>`;
+  }).join('')}</div>` : `<div class="empty"><h3>Nenhuma busca salva</h3><p>No catálogo, aplique os filtros e toque em <b>Salvar busca</b>. Avisamos quando surgir imóvel novo que combine.</p><a class="btn" href="./index.html#catalogo" style="margin-top:1rem">Ir ao catálogo</a></div>`;
+  $$('[data-al]', t).forEach((c) => c.onchange = async () => { try { await buscas.update(c.dataset.al, { alerta_email: c.checked }); toast(c.checked ? 'Alertas por e-mail ligados' : 'Alertas por e-mail desligados'); } catch (e) { toast(e.message, 'err'); c.checked = !c.checked; } });
+  $$('[data-ver]', t).forEach((a) => a.addEventListener('click', () => { buscas.update(a.dataset.ver, { visto_em: new Date().toISOString() }).catch(() => {}); }));
+  $$('[data-rm]', t).forEach((b) => b.onclick = async () => { if (!(await confirmBox('Excluir esta busca salva?', 'Excluir'))) return; try { await buscas.remove(b.dataset.rm); tabBuscas(); refreshCounts(); } catch (e) { toast(e.message, 'err'); } });
+}
+
+// ---------------------------------------------------------
+//  Painel (números)
+// ---------------------------------------------------------
+async function tabPainel() {
+  const t = $('#tab-painel');
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Últimos 30 dias</span><h2>Painel</h2></div></div><div id="pn-box"><div class="skeleton" style="height:320px"></div></div>`;
+  let stats, dias, all, leads = [], vis = [];
+  try {
+    [stats, dias, all] = await Promise.all([api.stats(30), api.viewsPorDia(14), loadImoveis(true)]);
+    try { leads = await api.listLeads(); } catch {}
+    try { vis = await visitas.list(); } catch {}
+  } catch (e) { $('#pn-box').innerHTML = dbErrorHTML(e); return; }
+  const byId = Object.fromEntries(all.map((i) => [i.id, i]));
+  const tot = (k) => stats.reduce((n, s) => n + Number(s[k] || 0), 0);
+  const ativos = stats.filter((s) => isPublicado(byId[s.imovel_id] || {})).length;
+  const pendVis = vis.filter((v) => v.corretor_id === auth.user.id && v.status === 'pendente' && new Date(v.data_hora) > new Date()).length;
+  const fechados = leads.filter((l) => l.etapa === 'fechado').length;
+  const conv = leads.length ? Math.round((fechados / leads.length) * 100) : 0;
+  const max = Math.max(1, ...dias.map((d) => Number(d.total)));
+  const top = [...stats].sort((a, b) => Number(b.views) - Number(a.views)).slice(0, 8);
+  const fmtDia = (d) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  $('#pn-box').innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><span>${icon('home')} Anúncios publicados</span><b>${num(ativos)}</b></div>
+      <div class="kpi"><span>${icon('eye')} Visualizações</span><b>${num(tot('views'))}</b></div>
+      <div class="kpi"><span>${icon('inbox')} Interessados</span><b>${num(tot('leads'))}</b></div>
+      <div class="kpi"><span>${icon('heart')} Favoritados</span><b>${num(tot('favoritos'))}</b></div>
+      <div class="kpi"><span>${icon('calendar')} Visitas a confirmar</span><b>${num(pendVis)}</b></div>
+      <div class="kpi"><span>${icon('check')} Negócios fechados</span><b>${num(fechados)}</b><span style="margin-top:.2rem">${conv}% dos interessados</span></div>
+    </div>
+    <div class="panel chart-card">
+      <h3>Visualizações por dia</h3><div class="sub">Últimos 14 dias · ${num(dias.reduce((n, d) => n + Number(d.total), 0))} no total</div>
+      <div class="bars" role="img" aria-label="Gráfico de barras de visualizações por dia">
+        <span class="y-max">${num(max)}</span>
+        ${dias.map((d, k) => { const h = (Number(d.total) / max) * 100; return `<div class="bar-col" tabindex="0" style="--k:${k};--h:${h}%"><i style="height:${h}%"></i><span class="bar-tip">${fmtDia(d.dia)} · ${num(d.total)} ${Number(d.total) === 1 ? 'visualização' : 'visualizações'}</span></div>`; }).join('')}
+      </div>
+      <div class="bar-x">${dias.map((d, k) => `<span>${k % 2 === 0 || dias.length <= 7 ? fmtDia(d.dia) : ''}</span>`).join('')}</div>
+      <table class="sr-only"><caption>Visualizações por dia</caption><tbody>${dias.map((d) => `<tr><th>${fmtDia(d.dia)}</th><td>${d.total}</td></tr>`).join('')}</tbody></table>
+    </div>
+    <div class="panel chart-card">
+      <h3>Desempenho por imóvel</h3><div class="sub">Os mais vistos nos últimos 30 dias</div>
+      ${top.length ? `<div class="table-wrap" style="margin-top:1rem;border:0"><table>
+        <thead><tr><th>Imóvel</th><th class="num-cell">Visualizações</th><th class="num-cell">Favoritos</th><th class="num-cell">Interessados</th><th class="num-cell">Visitas</th></tr></thead>
+        <tbody>${top.map((s) => { const im = byId[s.imovel_id]; return `<tr><td>${im ? `<a href="./imovel.html?id=${encodeURIComponent(im.id)}">${esc(im.titulo)}</a>` : '—'}</td><td class="num-cell">${num(s.views)}</td><td class="num-cell">${num(s.favoritos)}</td><td class="num-cell">${num(s.leads)}</td><td class="num-cell">${num(s.visitas)}</td></tr>`; }).join('')}</tbody>
+      </table></div>` : '<p class="muted">Sem dados ainda.</p>'}
+    </div>
+    ${DEMO ? '<p class="muted" style="font-size:.8rem">No modo demonstração os números são simulados.</p>' : ''}`;
 }
 
 async function tabEquipe() {
@@ -594,6 +874,7 @@ async function boot() {
     if (!auth.user) renderLogin(); else { renderShell(); route(); }
   });
   addEventListener('hashchange', () => auth.user && route());
+  if (auth.recovery) recoveryModal();
   finishLoading();
 }
 boot();

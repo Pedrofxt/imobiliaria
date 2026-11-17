@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Alvar Imóveis — Endereços que contam histórias</title>
   <meta name="description" content="Casas, apartamentos e terrenos para comprar ou alugar no litoral do Paraná. Alvar Imóveis (marca fictícia).">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Alvar Imóveis">
+  <meta property="og:title" content="Alvar Imóveis — Endereços que contam histórias">
+  <meta property="og:description" content="Casas, apartamentos e terrenos para comprar ou alugar no litoral do Paraná. Alvar Imóveis (marca fictícia).">
+  <meta property="og:image" content="https://pedrofxt.github.io/imobiliaria/assets/og.png">
+  <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+  <meta property="og:locale" content="pt_BR">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#B8552F">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <script>(function(){var t=localStorage.getItem('alvar_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t})()</script>
@@ -103,7 +111,18 @@
           </select>
         </div>
 
-        <div class="results-info"><span id="res-count">Carregando…</span><button class="btn btn-ghost btn-sm hide" id="f-clear">Limpar filtros</button></div>
+        <div class="results-info">
+          <span id="res-count">Carregando…</span>
+          <div class="results-actions">
+            <button class="btn btn-ghost btn-sm hide" id="f-clear">Limpar filtros</button>
+            <button class="btn btn-ghost btn-sm" id="save-search"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> Salvar busca</button>
+            <div class="view-toggle" role="group" aria-label="Visualização">
+              <button class="on" data-view="lista"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> Lista</button>
+              <button data-view="mapa"><svg class="i" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Mapa</button>
+            </div>
+          </div>
+        </div>
+        <div class="map-view hide" id="map-view"></div>
         <div class="grid" id="grid">
           <div class="skeleton" style="height:400px"></div><div class="skeleton" style="height:400px"></div><div class="skeleton" style="height:400px"></div>
         </div>

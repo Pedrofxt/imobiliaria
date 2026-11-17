@@ -78,6 +78,15 @@ const P = {
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  columns: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+  map: '<path d="M14.1 6.3 9.9 4.2a2 2 0 0 0-1.8 0L3.6 6.5A1 1 0 0 0 3 7.4v12.2a1 1 0 0 0 1.4.9l3.7-1.9a2 2 0 0 1 1.8 0l4.2 2.1a2 2 0 0 0 1.8 0l4.5-2.3a1 1 0 0 0 .6-.9V5.4a1 1 0 0 0-1.4-.9l-3.7 1.9a2 2 0 0 1-1.8 0z"/><path d="M15 6.8v14"/><path d="M9 3.2v14"/>',
+  list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+  calc: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
   eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
 };
 export const icon = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n] || ''}</svg>`;
@@ -130,7 +139,7 @@ export function askLogin(motivo = 'Entre para continuar') {
 // ---------------------------------------------------------
 //  Banco local do modo demonstração
 // ---------------------------------------------------------
-const LS = 'alvar_demo_v1';
+const LS = 'alvar_demo_v2';
 function db() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS)); } catch {}
@@ -168,6 +177,7 @@ export async function initAuth() {
     const { data } = await sb.auth.getSession();
     auth.user = data.session?.user || null;
     sb.auth.onAuthStateChange(async (_ev, session) => {
+      if (_ev === 'PASSWORD_RECOVERY') { auth.recovery = true; setTimeout(() => dispatchEvent(new Event('alvar:recovery')), 0); }
       const changed = (session?.user?.id || null) !== (auth.user?.id || null);
       auth.user = session?.user || null;
       if (changed) { await loadProfile(); await refreshFavs(); emit(); }
@@ -348,6 +358,47 @@ export const api = {
     else must(await sb.from('profiles').update(patch).eq('id', id));
     if (id === auth.user.id) { await loadProfile(); emit(); }
   },
+  async resetPassword(email) {
+    if (DEMO) return;
+    const redirectTo = location.origin + location.pathname.replace(/[^/]*$/, '') + 'conta.html#seguranca';
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+  },
+  async setLeadEtapa(id, etapa) {
+    if (DEMO) { const d = db(); const l = d.leads.find((x) => x.id === id); if (l) l.etapa = etapa; save(d); return; }
+    must(await sb.from('leads').update({ etapa }).eq('id', id));
+  },
+  async setSituacao(id, situacao, motivo = null) {
+    if (DEMO) { const d = db(); const i = d.imoveis.find((x) => x.id === id); i.situacao = situacao; i.motivo_rejeicao = motivo; save(d); return; }
+    must(await sb.from('imoveis').update({ situacao, motivo_rejeicao: motivo }).eq('id', id));
+  },
+  async registerView(imovelId) {
+    const k = 'alvar_view_' + imovelId;
+    try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch {}
+    if (DEMO) { const d = db(); d.views ||= []; d.views.push({ imovel_id: imovelId, created_at: new Date().toISOString() }); save(d); return; }
+    await sb.from('visualizacoes').insert({ imovel_id: imovelId });
+  },
+  async stats(dias = 30) {
+    if (DEMO) {
+      const d = db(); const since = Date.now() - dias * 864e5;
+      return d.imoveis.filter((i) => isAdmin() || i.responsavel_id === auth.user.id || i.criado_por === auth.user.id).map((i) => ({
+        imovel_id: i.id,
+        views: demoNum(i.id, 40, 420) + (d.views || []).filter((v) => v.imovel_id === i.id && Date.parse(v.created_at) > since).length,
+        favoritos: demoNum(i.id + 'f', 2, 38) + d.favoritos.filter((f) => f.imovel_id === i.id).length,
+        leads: demoNum(i.id + 'l', 0, 9) + d.leads.filter((l) => l.imovel_id === i.id).length,
+        visitas: demoNum(i.id + 'v', 0, 5) + (d.visitas || []).filter((v) => v.imovel_id === i.id).length,
+      }));
+    }
+    return must(await sb.rpc('stats_imoveis', { dias }));
+  },
+  async viewsPorDia(dias = 14) {
+    if (DEMO) {
+      const out = [];
+      for (let k = dias - 1; k >= 0; k--) { const dt = new Date(Date.now() - k * 864e5); out.push({ dia: dt.toISOString().slice(0, 10), total: demoNum(dt.toDateString(), 18, 95) + (k < 2 ? 0 : 0) }); }
+      return out;
+    }
+    return must(await sb.rpc('views_por_dia', { dias }));
+  },
   async changePassword(password) {
     if (DEMO) return;
     const { error } = await sb.auth.updateUser({ password });
@@ -493,6 +544,171 @@ function watchUnread() {
   unreadSub = chat.subscribe((m) => { if (m.autor_id !== auth.user?.id) setTimeout(refreshUnread, 300); if ($('#msg-panel')?.classList.contains('open')) setTimeout(renderMsgPanel, 300); });
 }
 
+
+// ---------------------------------------------------------
+//  Visitas agendadas
+// ---------------------------------------------------------
+export const visitas = {
+  async ocupados(imovelId) {
+    if (DEMO) return (db().visitas || []).filter((v) => v.imovel_id === imovelId && ['pendente', 'confirmada'].includes(v.status)).map((v) => v.data_hora);
+    const { data, error } = await sb.rpc('horarios_ocupados', { _imovel: imovelId });
+    if (error) return [];
+    return (data || []).map((r) => (typeof r === 'string' ? r : Object.values(r)[0]));
+  },
+  async create({ imovel_id, data_hora, observacao }) {
+    if (!auth.user) { askLogin('Entre para agendar uma visita'); return null; }
+    if (DEMO) {
+      const d = db(); d.visitas ||= [];
+      const im = d.imoveis.find((i) => i.id === imovel_id);
+      const corretor = im.responsavel_id || d.profiles.find((p) => p.papel === 'admin' && p.id !== auth.user.id)?.id;
+      if (corretor === auth.user.id) throw new Error('Você é o responsável por este imóvel.');
+      if (d.visitas.some((v) => v.imovel_id === imovel_id && v.data_hora === data_hora && ['pendente', 'confirmada'].includes(v.status))) throw new Error('Esse horário acabou de ser reservado. Escolha outro.');
+      const v = { id: 'v-' + uid().slice(0, 8), imovel_id, cliente_id: auth.user.id, corretor_id: corretor, data_hora, observacao, status: 'pendente', created_at: new Date().toISOString() };
+      d.visitas.push(v); save(d);
+      if (corretor?.startsWith('p-')) setTimeout(() => { const dd = db(); const x = dd.visitas.find((y) => y.id === v.id); if (x && x.status === 'pendente') { x.status = 'confirmada'; save(dd); } }, 4000);
+      return v;
+    }
+    const { data, error } = await sb.from('visitas').insert({ imovel_id, data_hora, observacao }).select('*').single();
+    if (error) throw new Error(error.message);
+    return data;
+  },
+  async list() {
+    const me = auth.user.id;
+    if (DEMO) {
+      const d = db();
+      return (d.visitas || []).filter((v) => v.cliente_id === me || v.corretor_id === me || isAdmin()).map((v) => {
+        const im = d.imoveis.find((i) => i.id === v.imovel_id);
+        return { ...v, imovel: im ? hydrate(im, d) : null, cliente: d.profiles.find((p) => p.id === v.cliente_id), corretor: d.profiles.find((p) => p.id === v.corretor_id) };
+      }).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+    }
+    const data = must(await sb.from('visitas').select('*, imovel:imoveis(id,titulo,bairro,cidade,endereco,imovel_fotos(url,ordem)), cliente:profiles!visitas_cliente_fk(id,nome,email,telefone,avatar_url), corretor:profiles!visitas_corretor_fk(id,nome,email,telefone,avatar_url)').order('data_hora'));
+    data.forEach((v) => v.imovel && sortFotos(v.imovel));
+    return data;
+  },
+  async setStatus(id, status) {
+    if (DEMO) { const d = db(); const v = d.visitas.find((x) => x.id === id); v.status = status; save(d); return; }
+    must(await sb.from('visitas').update({ status }).eq('id', id));
+  },
+};
+export const VISITA_STATUS = { pendente: 'Aguardando confirmação', confirmada: 'Confirmada', recusada: 'Recusada', cancelada: 'Cancelada', realizada: 'Realizada' };
+
+// ---------------------------------------------------------
+//  Buscas salvas
+// ---------------------------------------------------------
+export const buscas = {
+  async list() {
+    if (DEMO) return (db().buscas || []).filter((b) => b.user_id === auth.user.id);
+    return must(await sb.from('buscas_salvas').select('*').order('created_at', { ascending: false }));
+  },
+  async create(nome, filtros, alerta_email = true) {
+    if (!auth.user) { askLogin('Entre para salvar buscas e receber alertas'); return null; }
+    const row = { nome, filtros, alerta_email };
+    if (DEMO) { const d = db(); d.buscas ||= []; const b = { ...row, id: uid(), user_id: auth.user.id, visto_em: new Date().toISOString(), created_at: new Date().toISOString() }; d.buscas.unshift(b); save(d); return b; }
+    return must(await sb.from('buscas_salvas').insert(row).select('*').single());
+  },
+  async update(id, patch) {
+    if (DEMO) { const d = db(); Object.assign(d.buscas.find((b) => b.id === id), patch); save(d); return; }
+    must(await sb.from('buscas_salvas').update(patch).eq('id', id));
+  },
+  async remove(id) {
+    if (DEMO) { const d = db(); d.buscas = d.buscas.filter((b) => b.id !== id); save(d); return; }
+    must(await sb.from('buscas_salvas').delete().eq('id', id));
+  },
+};
+
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+export function matchFiltros(f, i) {
+  const q = norm(f.q);
+  return (!f.fin || i.finalidade === f.fin) && (!f.tipo || i.tipo === f.tipo) && (i.quartos || 0) >= (+f.quartos || 0) &&
+    (!f.preco || Number(i.preco) <= Number(f.preco)) &&
+    (!q || norm(`${i.titulo} ${i.bairro} ${i.cidade} ${i.descricao} ${(i.comodidades || []).join(' ')}`).includes(q));
+}
+export function filtrosLabel(f) {
+  const p = [];
+  if (f.tipo) p.push(TIPOS[f.tipo]);
+  if (f.fin) p.push(f.fin === 'venda' ? 'Comprar' : 'Alugar');
+  if (+f.quartos) p.push(`${f.quartos}+ quartos`);
+  if (f.preco) p.push(`até ${money(f.preco)}`);
+  if (f.q) p.push(`“${f.q}”`);
+  return p.length ? p : ['Todos os imóveis'];
+}
+export const isPublicado = (im) => !im.situacao || im.situacao === 'publicado';
+export const SITUACOES = { rascunho: 'Rascunho', pendente: 'Aguardando aprovação', publicado: 'Publicado', rejeitado: 'Rejeitado' };
+export const ETAPAS = { novo: 'Novo', contato: 'Em contato', visita: 'Visita', proposta: 'Proposta', fechado: 'Fechado', perdido: 'Perdido' };
+
+function demoNum(seed, min, max) {
+  let h = 2166136261; for (const c of String(seed)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return min + (Math.abs(h) % (max - min + 1));
+}
+
+// ---------------------------------------------------------
+//  Comparar imóveis (até 3, guardado no navegador)
+// ---------------------------------------------------------
+const CMP = 'alvar_compare';
+export function getCompare() { try { return JSON.parse(localStorage.getItem(CMP)) || []; } catch { return []; } }
+function setCompare(list) { try { localStorage.setItem(CMP, JSON.stringify(list)); } catch {} renderCompareBar(); }
+export function toggleCompare(id) {
+  let l = getCompare();
+  if (l.includes(id)) l = l.filter((x) => x !== id);
+  else { if (l.length >= 3) { toast('Compare até 3 imóveis por vez.', 'err'); return false; } l.push(id); }
+  setCompare(l);
+  return l.includes(id);
+}
+export function clearCompare() { setCompare([]); $$('[data-cmp]').forEach((b) => b.classList.remove('on')); }
+export function bindCompare(root = document) {
+  $$('[data-cmp]', root).forEach((b) => {
+    b.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const on = toggleCompare(b.dataset.cmp);
+      $$(`[data-cmp="${CSS.escape(b.dataset.cmp)}"]`).forEach((x) => x.classList.toggle('on', on));
+    };
+  });
+}
+export function renderCompareBar() {
+  if (/(comparar|conta)\.html$/.test(location.pathname)) { $('#cmp-bar')?.remove(); return; }
+  const l = getCompare();
+  let bar = $('#cmp-bar');
+  if (!l.length) { bar?.classList.remove('show'); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'cmp-bar'; bar.className = 'cmp-bar'; document.body.append(bar); }
+  bar.innerHTML = `${icon('columns')}<span><b>${l.length}</b> ${l.length === 1 ? 'imóvel' : 'imóveis'} para comparar</span>
+    <a class="btn btn-accent btn-sm" href="./comparar.html">Comparar</a><button class="btn-icon" aria-label="Limpar" id="cmp-clear">${icon('x')}</button>`;
+  $('#cmp-clear').onclick = clearCompare;
+  requestAnimationFrame(() => bar.classList.add('show'));
+}
+
+// ---------------------------------------------------------
+//  Mapa (Leaflet + OpenStreetMap)
+// ---------------------------------------------------------
+let leafletP = null;
+export function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  if (leafletP) return leafletP;
+  leafletP = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.append(css);
+    const sc = document.createElement('script');
+    sc.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    sc.onload = () => resolve(window.L); sc.onerror = () => { leafletP = null; reject(new Error('Não foi possível carregar o mapa')); };
+    document.head.append(sc);
+  });
+  return leafletP;
+}
+export function tileLayer(L) {
+  return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+}
+export function priceShort(im) {
+  const v = Number(im.preco) || 0;
+  const f = (n) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const t = v >= 1e6 ? `R$ ${f(v / 1e6)} mi` : v >= 1e3 ? `R$ ${f(v / 1e3)} mil` : money(v);
+  return im.finalidade === 'aluguel' ? t + '/mês' : t;
+}
+export async function geocode(q) {
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`, { headers: { 'Accept-Language': 'pt-BR' } });
+  const j = await r.json();
+  return j[0] ? { lat: +j[0].lat, lng: +j[0].lon } : null;
+}
+
 // Redimensiona a imagem no navegador antes de enviar
 export function compress(file, max = 1600, quality = .82, as = 'blob') {
   return new Promise((resolve, reject) => {
@@ -598,6 +814,7 @@ export function renderChrome(active = '') {
   }
 
   onAuth(renderAuthSlot);
+  renderCompareBar();
 }
 
 let lastWatched;
@@ -716,6 +933,7 @@ export function cardHTML(im, i = 0) {
       ${im.status && im.status !== 'disponivel' ? `<span class="tag dark">${STATUS[im.status]}</span>` : ''}
     </div>
     <button class="heart ${fav ? 'on' : ''}" data-fav="${esc(im.id)}" aria-label="Favoritar">${icon('heart')}</button>
+    <button class="cmp-btn ${getCompare().includes(im.id) ? 'on' : ''}" data-cmp="${esc(im.id)}" aria-label="Comparar" title="Comparar">${icon('columns')}</button>
     <a href="./imovel.html?id=${encodeURIComponent(im.id)}" class="card-body">
       <div class="card-price">${priceLabel(im)}</div>
       <div class="card-title">${esc(im.titulo)}</div>

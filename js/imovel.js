@@ -1,4 +1,4 @@
-import { $, $$, esc, api, auth, chat, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, num, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, TIPOS, FINALIDADES, STATUS, PLACEHOLDER, SITE, isAdmin, dbErrorHTML } from './core.js';
+import { $, $$, esc, api, auth, chat, visitas, isPublicado, SITUACOES, getCompare, toggleCompare, loadLeaflet, tileLayer, askLogin, priceShort, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, num, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, TIPOS, FINALIDADES, STATUS, PLACEHOLDER, SITE, isAdmin, dbErrorHTML, bindLoginButtons } from './core.js';
 
 renderChrome('imoveis');
 const root = $('#prop');
@@ -14,11 +14,12 @@ async function boot() {
     finishLoading(); return;
   }
   document.title = `${im.titulo} — Alvar Imóveis`;
+  if (isPublicado(im)) api.registerView(im.id).catch(() => {});
   render(im);
   finishLoading();
   try {
     const all = await api.listImoveis();
-    const sim = all.filter((x) => x.id !== im.id && (x.tipo === im.tipo || x.cidade === im.cidade)).slice(0, 3);
+    const sim = all.filter((x) => isPublicado(x) && x.id !== im.id && (x.tipo === im.tipo || x.cidade === im.cidade)).slice(0, 3);
     if (sim.length) {
       const sec = document.createElement('section');
       sec.className = 'section';
@@ -48,6 +49,7 @@ function render(im) {
   ].filter(([, v]) => v);
 
   root.innerHTML = `
+    ${!isPublicado(im) ? `<div class="draft-banner">${icon('eye')}<span>Este anúncio está como <b>${SITUACOES[im.situacao]}</b>${im.motivo_rejeicao ? ` — motivo: ${esc(im.motivo_rejeicao)}` : ''}. Só a equipe consegue vê-lo.</span></div>` : ''}
     <nav class="crumbs reveal"><a href="./index.html">Início</a>${icon('right')}<a href="./index.html?f=${im.finalidade}#catalogo">${FINALIDADES[im.finalidade]}</a>${icon('right')}<span>${esc(im.cidade)}</span></nav>
     <div class="prop-head reveal">
       <div>
@@ -60,6 +62,7 @@ function render(im) {
       </div>
       <div class="actions">
         ${canEdit ? `<a class="btn btn-ghost btn-sm" href="./conta.html?editar=${encodeURIComponent(im.id)}#novo">${icon('edit')} Editar</a>` : ''}
+        <button class="btn-icon ${getCompare().includes(im.id) ? 'on-cmp' : ''}" id="cmp" aria-label="Comparar" title="Comparar">${icon('columns')}</button>
         <button class="btn-icon" id="share" aria-label="Compartilhar">${icon('share')}</button>
         <button class="btn-icon heart-lg ${favs.has(im.id) ? 'on' : ''}" data-fav="${esc(im.id)}" aria-label="Favoritar" style="${favs.has(im.id) ? 'color:#E04F4F' : ''}">${icon('heart')}</button>
       </div>
@@ -76,8 +79,27 @@ function render(im) {
         </div></div>
         <div class="block reveal"><h2>Sobre o imóvel</h2><div class="prose">${esc(im.descricao || 'Sem descrição.')}</div></div>
         ${im.comodidades?.length ? `<div class="block reveal"><h2>Comodidades</h2><div class="amenities">${im.comodidades.map((c) => `<span>${icon('check')} ${esc(c)}</span>`).join('')}</div></div>` : ''}
+        <div class="block reveal" id="agendar"><h2>Agendar visita</h2>
+          <p class="muted" style="margin-top:-.6rem">Escolha o dia e o horário. ${r ? esc(r.nome.split(' ')[0]) : 'O corretor'} confirma por aqui e pelo chat.</p>
+          <div class="days" id="days"></div>
+          <div class="slots" id="slots" style="margin-top:.8rem"></div>
+          <div class="field" style="margin-top:1rem"><label for="v-obs">Observação (opcional)</label><input id="v-obs" maxlength="500" placeholder="Ex.: vou com minha família, prefiro entrar pela garagem…"></div>
+          <button class="btn btn-accent" id="v-go" style="margin-top:1rem" disabled>${icon('calendar')} Escolha um horário</button>
+        </div>
+        ${im.finalidade === 'venda' && Number(im.preco) > 0 ? `<div class="block reveal" id="simulador"><h2>Simule o financiamento</h2>
+          <div class="sim-grid">
+            <div class="form">
+              <div class="field"><div class="range-row"><label>Entrada</label><b id="s-ent-l"></b></div><input type="range" class="range" id="s-ent" min="10" max="90" step="5" value="20"></div>
+              <div class="field"><div class="range-row"><label>Prazo</label><b id="s-prazo-l"></b></div><input type="range" class="range" id="s-prazo" min="5" max="35" step="1" value="30"></div>
+              <div class="field"><label>Juros ao ano (%)</label><input type="number" id="s-taxa" min="1" max="30" step="0.1" value="11.5"></div>
+              <div class="field"><label>Sistema de amortização</label><div class="seg-sm" id="s-sis"><button type="button" class="on" data-v="sac">SAC</button><button type="button" data-v="price">Price</button></div></div>
+            </div>
+            <div class="sim-out" id="s-out"></div>
+          </div>
+          <p class="muted" style="font-size:.78rem;margin-top:1rem">Simulação aproximada, sem seguros (MIP/DFI), taxas administrativas e ITBI. Condições reais dependem do banco e da análise de crédito.</p>
+        </div>` : ''}
         <div class="block reveal" style="border:0"><h2>Localização</h2>
-          <iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Mapa" src="https://maps.google.com/maps?q=${encodeURIComponent(endereco)}&z=15&output=embed"></iframe>
+          ${im.latitude && im.longitude ? `<div class="map" id="prop-map"></div>` : `<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Mapa" src="https://maps.google.com/maps?q=${encodeURIComponent(endereco)}&z=15&output=embed"></iframe>`}
         </div>
       </div>
 
@@ -94,8 +116,10 @@ function render(im) {
             <div class="field"><label for="l-nome">Nome</label><input id="l-nome" required value="${esc(auth.profile?.nome || '')}"></div>
             <div class="form-row"><div class="field"><label for="l-email">E-mail</label><input id="l-email" type="email" required value="${esc(auth.profile?.email || auth.user?.email || '')}"></div>
             <div class="field"><label for="l-tel">Telefone</label><input id="l-tel" type="tel" value="${esc(auth.profile?.telefone || '')}"></div></div>
+            <input class="hp" id="l-site" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
             <div class="field"><label for="l-msg">Mensagem</label><textarea id="l-msg" style="min-height:90px">Olá! Gostaria de mais informações e de agendar uma visita.</textarea></div>
             <button class="btn btn-accent" type="submit">Tenho interesse</button>
+            <a class="btn btn-ghost btn-sm" href="#agendar">${icon('calendar')} Agendar visita</a>
           </form>
         </div>
         ${r ? `<div class="panel reveal" style="--d:.1s">
@@ -122,15 +146,33 @@ function render(im) {
   if (favs.has(im.id)) hb.querySelector('svg').style.fill = 'currentColor';
 
   $('#share').onclick = async () => {
-    try { if (navigator.share) await navigator.share({ title: im.titulo, url: location.href }); else { await navigator.clipboard.writeText(location.href); toast('Link copiado!'); } } catch {}
+    try { if (navigator.share) await navigator.share({ title: im.titulo, text: `${im.titulo} — ${priceShort(im)} · Alvar Imóveis`, url: location.href }); else { await navigator.clipboard.writeText(location.href); toast('Link copiado!'); } } catch {}
   };
 
+  const formStart = Date.now();
   $('#lead').onsubmit = async (e) => {
     e.preventDefault();
-    const btn = e.target.querySelector('button'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Enviando…';
+    const form = e.target;
+    const btn = form.querySelector('button[type=submit]');
+    // anti-robô: campo escondido preenchido ou envio rápido demais
+    if ($('#l-site').value || Date.now() - formStart < 2500) { btn.innerHTML = `${icon('check')} Interesse enviado`; btn.disabled = true; return; }
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Enviando…';
+    const nome = $('#l-nome').value.trim(), email = $('#l-email').value.trim(), telefone = $('#l-tel').value.trim(), mensagem = $('#l-msg').value.trim();
     try {
-      await api.createLead({ imovel_id: im.id, nome: $('#l-nome').value.trim(), email: $('#l-email').value.trim(), telefone: $('#l-tel').value.trim(), mensagem: $('#l-msg').value.trim() });
+      await api.createLead({ imovel_id: im.id, nome, email, telefone, mensagem });
+      let convId = null;
+      if (auth.user && r && auth.user.id !== r.id) {
+        try { convId = await chat.open(im.id); await chat.send(convId, `📩 ${mensagem || 'Tenho interesse neste imóvel.'}${telefone ? `\nTelefone: ${telefone}` : ''}`); } catch {}
+      }
       btn.innerHTML = `${icon('check')} Interesse enviado`;
+      const after = document.createElement('div');
+      after.className = 'notice';
+      after.style.marginTop = '.4rem';
+      after.innerHTML = convId
+        ? `Mensagem enviada também pelo chat. <a href="./conta.html?c=${encodeURIComponent(convId)}#chat" style="text-decoration:underline;font-weight:600">Continuar a conversa →</a>`
+        : `Recebemos seu contato! ${auth.user ? '' : `<button type="button" data-login style="text-decoration:underline;font-weight:600">Entre com Google</button> para acompanhar a resposta pelo chat.`}`;
+      form.append(after);
+      bindLoginButtons(after);
       toast(`Recebemos seu contato! ${r ? r.nome.split(' ')[0] + ' vai falar com você.' : ''}`);
     } catch (err) { toast(err.message || 'Erro ao enviar', 'err'); btn.disabled = false; btn.textContent = 'Tenho interesse'; }
   };
@@ -143,7 +185,104 @@ function render(im) {
     oc.disabled = false;
   };
 
+  const cb = $('#cmp');
+  cb.onclick = () => { const on = toggleCompare(im.id); cb.classList.toggle('on-cmp', on); toast(on ? 'Adicionado à comparação' : 'Removido da comparação'); };
+
+  agenda(im, r);
+  simulador(im);
+  if (im.latitude && im.longitude) propMap(im);
+
   lightbox(fotos);
+}
+
+
+// ---------- Agendar visita ----------
+async function agenda(im, r) {
+  const daysBox = $('#days'), slotsBox = $('#slots'), go = $('#v-go');
+  if (!daysBox) return;
+  if (auth.user && r && auth.user.id === r.id) { $('#agendar').innerHTML = `<h2>Agendar visita</h2><p class="muted">Você é o responsável por este imóvel. As visitas pedidas aparecem em <a class="inline" href="./conta.html#visitas" style="color:var(--accent);text-decoration:underline">Minha conta → Visitas</a>.</p>`; return; }
+  let ocupados = new Set();
+  try { (await visitas.ocupados(im.id)).forEach((d) => ocupados.add(new Date(d).getTime())); } catch {}
+  const dias = [];
+  for (let k = 1; dias.length < 12 && k < 30; k++) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + k); if (d.getDay() !== 0) dias.push(d); }
+  let dia = null, hora = null;
+  const horas = (d) => (d.getDay() === 6 ? [9, 10, 11, 12] : [9, 10, 11, 13, 14, 15, 16, 17]);
+  daysBox.innerHTML = dias.map((d, i) => `<button type="button" class="day" data-i="${i}">${d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}<b>${d.getDate()}</b>${d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</button>`).join('');
+  const drawSlots = () => {
+    if (!dia) { slotsBox.innerHTML = '<p class="muted" style="font-size:.88rem;margin:0;grid-column:1/-1">Escolha um dia acima.</p>'; return; }
+    slotsBox.innerHTML = horas(dia).map((h) => {
+      const t = new Date(dia); t.setHours(h, 0, 0, 0);
+      return `<button type="button" class="slot ${hora && hora.getTime() === t.getTime() ? 'on' : ''}" data-t="${t.getTime()}" ${ocupados.has(t.getTime()) ? 'disabled title="Horário ocupado"' : ''}>${String(h).padStart(2, '0')}:00</button>`;
+    }).join('');
+    $$('.slot', slotsBox).forEach((b) => b.onclick = () => { hora = new Date(+b.dataset.t); drawSlots(); upd(); });
+  };
+  const upd = () => {
+    go.disabled = !hora;
+    go.innerHTML = hora ? `${icon('calendar')} Pedir visita · ${hora.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} às ${hora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : `${icon('calendar')} Escolha um horário`;
+  };
+  $$('.day', daysBox).forEach((b) => b.onclick = () => { $$('.day', daysBox).forEach((x) => x.classList.remove('on')); b.classList.add('on'); dia = dias[+b.dataset.i]; hora = null; drawSlots(); upd(); });
+  drawSlots();
+  go.onclick = async () => {
+    if (!auth.user) { askLogin('Entre para agendar sua visita'); return; }
+    go.disabled = true; go.innerHTML = '<span class="spinner"></span> Enviando…';
+    try {
+      const obs = $('#v-obs').value.trim();
+      const v = await visitas.create({ imovel_id: im.id, data_hora: hora.toISOString(), observacao: obs || null });
+      if (!v) { upd(); return; }
+      ocupados.add(hora.getTime());
+      const quando = `${hora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })} às ${hora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      try { const c = await chat.open(im.id); await chat.send(c, `📅 Pedi uma visita para ${quando}.${obs ? `\nObs.: ${obs}` : ''}`); } catch {}
+      $('#agendar').querySelector('.notice')?.remove();
+      const n = document.createElement('div'); n.className = 'notice'; n.style.marginTop = '1rem';
+      n.innerHTML = `Pedido enviado para <b>${quando}</b>. Você recebe a confirmação em <a href="./conta.html#visitas" style="text-decoration:underline;font-weight:600">Minha conta → Visitas</a> e pelo chat.`;
+      $('#agendar').append(n);
+      toast('Visita solicitada!');
+      hora = null; drawSlots(); upd();
+    } catch (err) { toast(err.message, 'err'); upd(); }
+  };
+}
+
+// ---------- Simulador de financiamento ----------
+function simulador(im) {
+  const out = $('#s-out'); if (!out) return;
+  let sis = 'sac';
+  const calc = () => {
+    const preco = Number(im.preco), entPct = +$('#s-ent').value, anos = +$('#s-prazo').value, taxaAno = Math.max(0, +$('#s-taxa').value || 0) / 100;
+    const entrada = preco * entPct / 100, fin = preco - entrada, n = anos * 12, i = Math.pow(1 + taxaAno, 1 / 12) - 1;
+    $('#s-ent-l').textContent = `${entPct}% · ${money(entrada)}`; $('#s-prazo-l').textContent = `${anos} anos · ${n} parcelas`;
+    let primeira, ultima, total;
+    if (sis === 'price') {
+      const pmt = i ? fin * i / (1 - Math.pow(1 + i, -n)) : fin / n;
+      primeira = ultima = pmt; total = pmt * n;
+    } else {
+      const amort = fin / n;
+      primeira = amort + fin * i; ultima = amort + amort * i;
+      total = fin + i * amort * n * (n + 1) / 2;
+    }
+    out.innerHTML = `<span class="muted" style="font-size:.85rem">${sis === 'sac' ? 'Primeira parcela' : 'Parcela fixa'}</span>
+      <div class="big">${money(primeira)}</div>
+      <ul class="cost-list">
+        ${sis === 'sac' ? `<li>Última parcela <b>${money(ultima)}</b></li>` : ''}
+        <li>Valor financiado <b>${money(fin)}</b></li>
+        <li>Total de juros <b>${money(total - fin)}</b></li>
+        <li>Total pago (com entrada) <b>${money(total + entrada)}</b></li>
+        <li>Renda familiar sugerida <b>${money(primeira / 0.3)}</b></li>
+      </ul>`;
+  };
+  ['s-ent', 's-prazo', 's-taxa'].forEach((id) => $('#' + id).addEventListener('input', calc));
+  $$('#s-sis button').forEach((b) => b.onclick = () => { $$('#s-sis button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); sis = b.dataset.v; calc(); });
+  calc();
+}
+
+// ---------- Mapa do imóvel ----------
+async function propMap(im) {
+  const el = $('#prop-map');
+  try {
+    const L = await loadLeaflet();
+    const m = L.map(el, { scrollWheelZoom: false }).setView([im.latitude, im.longitude], 15);
+    tileLayer(L).addTo(m);
+    L.marker([im.latitude, im.longitude], { icon: L.divIcon({ className: '', html: `<span class="price-pin ${im.finalidade}">${esc(priceShort(im))}</span>`, iconSize: [0, 0] }) }).addTo(m);
+  } catch { el.outerHTML = `<iframe class="map" loading="lazy" title="Mapa" src="https://maps.google.com/maps?q=${im.latitude},${im.longitude}&z=15&output=embed"></iframe>`; }
 }
 
 function lightbox(fotos) {
