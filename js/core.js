@@ -31,7 +31,7 @@ export const fmtDate = (d) => new Date(d).toLocaleDateString('pt-BR', { day: '2-
 export const TIPOS = { casa: 'Casa', apartamento: 'Apartamento', cobertura: 'Cobertura', terreno: 'Terreno', comercial: 'Comercial' };
 export const FINALIDADES = { venda: 'Venda', aluguel: 'Aluguel' };
 export const STATUS = { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido', alugado: 'Alugado' };
-export const PAPEIS = { cliente: 'Cliente', corretor: 'Corretor', admin: 'Administrador' };
+export const PAPEIS = { cliente: 'Visitante', corretor: 'Corretor', admin: 'Administrador' };
 export const COMODIDADES = ['Piscina', 'Churrasqueira', 'Varanda', 'Terraço', 'Jardim', 'Quintal', 'Academia', 'Salão de festas', 'Portaria 24h', 'Elevador', 'Pet friendly', 'Mobiliado', 'Ar-condicionado', 'Energia solar', 'Automação', 'Vista para o mar', 'Condomínio fechado', 'Closet', 'Lareira', 'Espaço gourmet'];
 
 export const loc = (im) => [im.bairro, im.cidade].filter(Boolean).map(esc).join(', ');
@@ -132,8 +132,17 @@ export function confirmBox(texto, okLabel = 'Confirmar') {
   });
 }
 
+// Escolha "Visitante" ou "Corretor" antes de entrar
+export function tipoPicker(sel = localStorage.getItem('alvar_tipo') || 'visitante') {
+  const n = 'tipo-' + Math.random().toString(36).slice(2, 7);
+  return `<div class="tipo-picker" role="radiogroup" aria-label="Como você quer entrar">
+    <label class="tipo-opt"><input type="radio" name="${n}" value="visitante" ${sel !== 'corretor' ? 'checked' : ''}><span>${icon('search')}<b>Visitante</b><small>Procurar imóveis, favoritar, agendar visitas e conversar.</small></span></label>
+    <label class="tipo-opt"><input type="radio" name="${n}" value="corretor" ${sel === 'corretor' ? 'checked' : ''}><span>${icon('key')}<b>Corretor</b><small>Anunciar imóveis. Precisa da aprovação da equipe.</small></span></label>
+  </div>`;
+}
+
 export function askLogin(motivo = 'Entre para continuar') {
-  modal(`<div style="text-align:center;padding:.5rem 0">${LOGO.replace('class="logo-mark"', 'class="logo-mark" style="width:52px;height:52px;color:var(--accent);margin:0 auto 1rem"')}<h3 style="font-size:1.7rem">${esc(motivo)}</h3><p class="muted">Use sua conta Google — leva dois segundos.</p>${googleBtn('Continuar com Google', 'width:100%;margin-top:1rem')}<p class="muted" style="font-size:.75rem;margin-top:1rem">Ao continuar, você concorda com os <a href="./termos.html" style="text-decoration:underline">Termos</a> e a <a href="./privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p></div>`);
+  modal(`<div style="text-align:center;padding:.5rem 0" data-login-box>${LOGO.replace('class="logo-mark"', 'class="logo-mark" style="width:52px;height:52px;color:var(--accent);margin:0 auto 1rem"')}<h3 style="font-size:1.7rem">${esc(motivo)}</h3><p class="muted">Como você quer usar a Alvar?</p>${tipoPicker()}${googleBtn('Continuar com Google', 'width:100%;margin-top:1rem')}<p class="muted" style="font-size:.75rem;margin-top:1rem">Ao continuar, você concorda com os <a href="./termos.html" style="text-decoration:underline">Termos</a> e a <a href="./privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p></div>`);
 }
 
 // ---------------------------------------------------------
@@ -145,6 +154,12 @@ function db() {
   try { d = JSON.parse(localStorage.getItem(LS)); } catch {}
   if (!d) { d = { profiles: structuredClone(DEMO_PROFILES), imoveis: structuredClone(DEMO_IMOVEIS), favoritos: [], leads: [], user: null }; save(d); }
   d.conversas ||= []; d.mensagens ||= [];
+  if (!d.solicitacoes) {
+    d.profiles.forEach((p) => { if (['corretor', 'admin'].includes(p.papel)) p.tipo_conta ||= 'corretor'; });
+    d.profiles.push({ id: 'p-bruno', nome: 'Bruno Lacerda', email: 'bruno.lacerda@email.com', telefone: '41988887777', creci: 'CRECI-PR 71.508', cargo: '', bio: '', papel: 'cliente', tipo_conta: 'corretor', avatar_url: null });
+    d.solicitacoes = [{ id: 's-bruno', user_id: 'p-bruno', creci: 'CRECI-PR 71.508', telefone: '41988887777', mensagem: 'Atuo há 6 anos com locação em Paranaguá e Pontal. Gostaria de anunciar pela Alvar.', status: 'pendente', created_at: new Date(Date.now() - 3600e3).toISOString() }];
+    d.votos = [];
+  }
   return d;
 }
 function save(d) {
@@ -192,7 +207,7 @@ export async function signIn() {
   if (DEMO) {
     const d = db();
     const id = 'demo-user';
-    if (!d.profiles.find((p) => p.id === id)) d.profiles.push({ id, nome: 'Visitante Demo', email: 'demo@alvar.app', telefone: '', creci: '', cargo: 'Administrador (demo)', bio: '', papel: 'admin', avatar_url: null });
+    if (!d.profiles.find((p) => p.id === id)) d.profiles.push({ id, nome: 'Visitante Demo', email: 'demo@alvar.app', telefone: '', creci: '', cargo: 'Administrador (demo)', bio: '', papel: 'admin', tipo_conta: 'corretor', avatar_url: null });
     d.user = { id, email: 'demo@alvar.app' };
     save(d);
     auth.user = d.user; await loadProfile(); await refreshFavs(); emit();
@@ -221,7 +236,16 @@ export async function signOut() {
 }
 
 export function bindLoginButtons(root = document) {
-  $$('[data-login]', root).forEach((b) => { b.onclick = (e) => { e.preventDefault(); signIn(); }; });
+  $$('[data-login]', root).forEach((b) => {
+    b.onclick = (e) => {
+      e.preventDefault();
+      const box = b.closest('[data-login-box]');
+      if (!box) { askLogin('Entrar na Alvar'); return; } // sem escolha na tela → abre a escolha
+      const tipo = box.querySelector('.tipo-picker input:checked')?.value || 'visitante';
+      try { localStorage.setItem('alvar_tipo', tipo); } catch {}
+      signIn();
+    };
+  });
 }
 
 // ---------------------------------------------------------
@@ -702,6 +726,74 @@ export async function geocode(q) {
   return j[0] ? { lat: +j[0].lat, lng: +j[0].lon } : null;
 }
 
+
+// ---------------------------------------------------------
+//  Visitante × corretor: solicitações, votos e configurações
+// ---------------------------------------------------------
+export const corretores = {
+  async escolher(tipo, creci = null, telefone = null, mensagem = null) {
+    if (DEMO) {
+      const d = db(); const p = d.profiles.find((x) => x.id === auth.user.id);
+      if (['corretor', 'admin'].includes(p.papel)) { p.tipo_conta = 'corretor'; save(d); await loadProfile(); return 'equipe'; }
+      if (tipo === 'visitante') { p.tipo_conta ||= 'visitante'; save(d); await loadProfile(); return 'visitante'; }
+      p.tipo_conta = 'corretor'; p.creci = creci; if (telefone) p.telefone = telefone;
+      d.solicitacoes ||= []; d.votos ||= [];
+      d.solicitacoes = d.solicitacoes.filter((x) => x.user_id !== p.id);
+      d.solicitacoes.push({ id: 's-' + uid().slice(0, 8), user_id: p.id, creci, telefone, mensagem, status: 'pendente', created_at: new Date().toISOString() });
+      save(d); await loadProfile(); return 'pendente';
+    }
+    const { data, error } = await sb.rpc('escolher_tipo_conta', { _tipo: tipo, _creci: creci, _telefone: telefone, _mensagem: mensagem });
+    if (error) throw new Error(error.message);
+    await loadProfile(); emit();
+    return data;
+  },
+  async minha() {
+    if (DEMO) return (db().solicitacoes || []).find((x) => x.user_id === auth.user.id) || null;
+    const { data } = await sb.from('solicitacoes_corretor').select('*').eq('user_id', auth.user.id).maybeSingle();
+    return data;
+  },
+  async votosDe(solId) {
+    if (DEMO) return (db().votos || []).filter((v) => v.solicitacao_id === solId);
+    return must(await sb.from('votos_corretor').select('*').eq('solicitacao_id', solId));
+  },
+  async list() {
+    if (DEMO) {
+      const d = db();
+      return (d.solicitacoes || []).map((s) => ({ ...s, perfil: d.profiles.find((p) => p.id === s.user_id), votos: (d.votos || []).filter((v) => v.solicitacao_id === s.id).map((v) => ({ ...v, aprovador: d.profiles.find((p) => p.id === v.aprovador_id) })) }))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+    return must(await sb.from('solicitacoes_corretor').select('*, perfil:profiles!solicitacoes_corretor_user_id_fkey(id,nome,email,avatar_url,telefone), votos:votos_corretor(voto,aprovador_id,created_at,aprovador:profiles!votos_corretor_aprovador_id_fkey(id,nome))').order('created_at', { ascending: false }));
+  },
+  async votar(solId, voto) {
+    if (DEMO) {
+      const d = db(); const s = d.solicitacoes.find((x) => x.id === solId); const cfg = d.config || { quem_aprova: 'equipe', aprovacoes_necessarias: 1 };
+      if (s.user_id === auth.user.id) throw new Error('Você não pode votar na própria solicitação');
+      d.votos = (d.votos || []).filter((v) => !(v.solicitacao_id === solId && v.aprovador_id === auth.user.id));
+      d.votos.push({ solicitacao_id: solId, aprovador_id: auth.user.id, voto, created_at: new Date().toISOString() });
+      const sim = d.votos.filter((v) => v.solicitacao_id === solId && v.voto === 'aprovar').length;
+      const nao = d.votos.filter((v) => v.solicitacao_id === solId && v.voto === 'rejeitar').length;
+      const adm = isAdmin();
+      if ((adm && voto === 'aprovar') || sim >= cfg.aprovacoes_necessarias) { s.status = 'aprovada'; const p = d.profiles.find((x) => x.id === s.user_id); if (p && p.papel === 'cliente') { p.papel = 'corretor'; p.tipo_conta = 'corretor'; p.creci ||= s.creci; } }
+      else if ((adm && voto === 'rejeitar') || nao >= cfg.aprovacoes_necessarias) s.status = 'rejeitada';
+      s.decidido_em = s.status !== 'pendente' ? new Date().toISOString() : null;
+      save(d); return s.status;
+    }
+    const { data, error } = await sb.rpc('votar_corretor', { _solicitacao: solId, _voto: voto });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+  async config() {
+    if (DEMO) return db().config || { quem_aprova: 'equipe', aprovacoes_necessarias: 1 };
+    const { data } = await sb.from('configuracoes').select('*').eq('id', 1).maybeSingle();
+    return data || { quem_aprova: 'equipe', aprovacoes_necessarias: 1 };
+  },
+  async salvarConfig(patch) {
+    if (DEMO) { const d = db(); d.config = { ...(d.config || { quem_aprova: 'equipe', aprovacoes_necessarias: 1 }), ...patch }; save(d); return; }
+    must(await sb.from('configuracoes').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', 1));
+  },
+};
+export const podeAprovar = (cfg) => isAdmin() || (auth.profile?.papel === 'corretor' && (cfg?.quem_aprova || 'equipe') === 'equipe');
+
 // Redimensiona a imagem no navegador antes de enviar
 export function compress(file, max = 1600, quality = .82, as = 'blob') {
   return new Promise((resolve, reject) => {
@@ -810,8 +902,63 @@ export function renderChrome(active = '') {
   renderCompareBar();
 }
 
+let onboardingShown = false;
+async function checkOnboarding() {
+  if (!auth.user || !auth.profile || auth.profile.tipo_conta || onboardingShown) return;
+  onboardingShown = true;
+  let escolhido = null; try { escolhido = localStorage.getItem('alvar_tipo'); } catch {}
+  if (escolhido === 'visitante') { try { await corretores.escolher('visitante'); } catch {} return; }
+  onboardingModal(escolhido || 'visitante');
+}
+
+// Primeiro acesso: confirmar visitante ou pedir acesso de corretor
+export function onboardingModal(sel = 'visitante', { obrigatorio = true } = {}) {
+  const { el, close } = modal(`
+    <div data-onb>
+      <span class="eyebrow">${obrigatorio ? 'Bem-vindo à Alvar' : 'Acesso de corretor'}</span>
+      <h3 style="font-size:1.7rem;margin:.3rem 0 .4rem">${obrigatorio ? 'Como você vai usar a Alvar?' : 'Quero anunciar imóveis'}</h3>
+      ${obrigatorio ? tipoPicker(sel) : ''}
+      <form class="form" id="onb-form" style="margin-top:1rem">
+        <div class="onb-corretor ${obrigatorio && sel !== 'corretor' ? 'hide' : ''}">
+          <div class="notice" style="margin-bottom:.9rem;font-size:.86rem">Sua conta funciona como <b>visitante</b> até ser aprovada pela equipe. Você recebe a resposta por e-mail e na sua conta.</div>
+          <div class="form-row stack"><div class="field"><label>CRECI *</label><input name="creci" maxlength="40" placeholder="CRECI-PR 00.000" value="${esc(auth.profile?.creci || '')}"></div>
+          <div class="field"><label>Telefone / WhatsApp</label><input name="telefone" type="tel" maxlength="40" value="${esc(auth.profile?.telefone || '')}"></div></div>
+          <div class="field" style="margin-top:.8rem"><label>Conte um pouco sobre você (opcional)</label><textarea name="mensagem" maxlength="600" style="min-height:80px" placeholder="Onde atua, há quanto tempo, especialidade…"></textarea></div>
+        </div>
+        <button class="btn btn-accent" type="submit" style="width:100%">${obrigatorio && sel !== 'corretor' ? 'Continuar como visitante' : 'Enviar para aprovação'}</button>
+      </form>
+    </div>`);
+  if (obrigatorio) {
+    // escolha obrigatória: sem botão de fechar, sem fechar pelo fundo ou pelo Esc
+    el.querySelector('.modal-close').remove();
+    el.addEventListener('click', (e) => { if (e.target === el) e.stopImmediatePropagation(); }, true);
+    const esc = (e) => { if (e.key === 'Escape' && document.body.contains(el)) e.stopImmediatePropagation(); else if (!document.body.contains(el)) removeEventListener('keydown', esc, true); };
+    addEventListener('keydown', esc, true);
+  }
+  const form = el.querySelector('#onb-form'), btn = form.querySelector('[type=submit]');
+  const tipo = () => (obrigatorio ? el.querySelector('.tipo-picker input:checked').value : 'corretor');
+  el.querySelectorAll('.tipo-picker input').forEach((r) => r.onchange = () => {
+    el.querySelector('.onb-corretor').classList.toggle('hide', tipo() !== 'corretor');
+    btn.textContent = tipo() === 'corretor' ? 'Enviar para aprovação' : 'Continuar como visitante';
+  });
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const t = tipo();
+    if (t === 'corretor' && !form.creci.value.trim()) { toast('Informe o CRECI.', 'err'); form.creci.focus(); return; }
+    btn.disabled = true;
+    try {
+      const r = await corretores.escolher(t, form.creci.value, form.telefone.value, form.mensagem.value);
+      try { localStorage.setItem('alvar_tipo', t); } catch {}
+      el.classList.remove('open'); setTimeout(() => el.remove(), 350);
+      toast(r === 'pendente' ? 'Solicitação enviada! Enquanto isso, você navega como visitante.' : 'Tudo pronto. Boas buscas!');
+      dispatchEvent(new Event('alvar:tipo'));
+    } catch (err) { toast(err.message, 'err'); btn.disabled = false; }
+  };
+}
+
 let lastWatched;
 function renderAuthSlot() {
+  checkOnboarding();
   const slot = $('#auth-slot'); if (!slot) return;
   updateFavBadge();
   $('#msg-wrap')?.classList.toggle('hide', !auth.user);

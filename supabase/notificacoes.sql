@@ -17,7 +17,7 @@ begin
       if new.situacao is not distinct from old.situacao then return new; end if;
       anterior := old.situacao;
     end if;
-  elsif tg_table_name = 'visitas' and tg_op = 'UPDATE' then
+  elsif tg_table_name in ('visitas', 'solicitacoes_corretor') and tg_op = 'UPDATE' then
     if new.status is not distinct from old.status then return new; end if;
   end if;
 
@@ -41,3 +41,5 @@ drop trigger if exists notificar_visitas on public.visitas;
 create trigger notificar_visitas after insert or update on public.visitas for each row execute function public.alvar_notificar();
 drop trigger if exists notificar_imoveis on public.imoveis;
 create trigger notificar_imoveis after insert or update on public.imoveis for each row execute function public.alvar_notificar();
+drop trigger if exists notificar_solicitacoes on public.solicitacoes_corretor;
+create trigger notificar_solicitacoes after insert or update on public.solicitacoes_corretor for each row execute function public.alvar_notificar();

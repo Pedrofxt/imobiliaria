@@ -676,3 +676,31 @@ details summary { list-style: none; }
 .field > .seg-sm { justify-self: start; }
 .leaflet-marker-icon:hover { z-index: 9999 !important; }
 .leaflet-container a.map-pop, .leaflet-container a.map-pop:hover { color: var(--text); text-decoration: none; display: block; }
+
+/* ---------- visitante × corretor ---------- */
+.tipo-picker { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1rem; text-align: left; }
+.tipo-opt { cursor: pointer; }
+.tipo-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.tipo-opt > span { display: grid; gap: .25rem; height: 100%; padding: .95rem; border: 1.5px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); transition: .2s var(--ease); }
+.tipo-opt > span svg { width: 22px; height: 22px; color: var(--muted); }
+.tipo-opt b { font-size: .98rem; }
+.tipo-opt small { font-size: .78rem; color: var(--muted); line-height: 1.35; }
+.tipo-opt:hover > span { border-color: var(--text); }
+.tipo-opt input:checked + span { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tipo-opt input:checked + span svg { color: var(--accent); }
+.tipo-opt input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 420px) { .tipo-picker { grid-template-columns: 1fr; } }
+.sol-card { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: start; padding: 1.1rem 1.2rem; }
+.sol-card h4 { font-family: var(--ff-body); font-weight: 700; font-size: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.sol-card .meta { font-size: .84rem; color: var(--muted); display: flex; gap: .8rem; flex-wrap: wrap; margin-top: .2rem; }
+.sol-card blockquote { margin: .6rem 0 0; padding: .55rem .8rem; background: var(--bg-2); border-left: 3px solid var(--accent); border-radius: 6px; font-size: .88rem; }
+.sol-card .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+.votes { display: flex; gap: .3rem; align-items: center; margin-top: .6rem; font-size: .8rem; color: var(--muted); flex-wrap: wrap; }
+.vote-bar { display: inline-flex; gap: 3px; }
+.vote-bar i { width: 18px; height: 6px; border-radius: 3px; background: var(--line); }
+.vote-bar i.on { background: var(--ok); }
+.pill.aprovada { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.pill.rejeitada { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+@media (max-width: 640px) { .sol-card { grid-template-columns: auto 1fr; } .sol-card .row-actions { grid-column: 1 / -1; justify-content: flex-start; } }
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 640px) { .config-grid { grid-template-columns: 1fr; } }

@@ -32,7 +32,7 @@ js/config.js      URL e chave pública do Supabase
 js/core.js        cliente Supabase, auth, API de dados, componentes
 supabase/schema.sql   tabelas, RLS, triggers, bucket de fotos
 supabase/seed.sql     imóveis de exemplo (opcional)
-supabase/chat.sql, excluir-conta.sql, melhorias.sql   atualizações (já incluídas no schema.sql)
+supabase/chat.sql, excluir-conta.sql, melhorias.sql, corretores.sql   atualizações (já incluídas no schema.sql)
 supabase/notificacoes.sql      gatilhos dos avisos por e-mail
 supabase/functions/notificar   Edge Function que envia os e-mails
 ```
@@ -52,7 +52,7 @@ supabase/functions/notificar   Edge Function que envia os e-mails
 
 ## Atualizando um banco já existente
 
-Se você já rodou uma versão antiga do `schema.sql`, rode na ordem: `chat.sql`, `excluir-conta.sql`, `melhorias.sql`. Todos podem ser executados mais de uma vez.
+Se você já rodou uma versão antiga do `schema.sql`, rode na ordem: `chat.sql`, `excluir-conta.sql`, `melhorias.sql`, `corretores.sql`. Todos podem ser executados mais de uma vez.
 
 ## E-mails pelo Gmail (sem domínio)
 
@@ -68,11 +68,15 @@ Ative a verificação em duas etapas na sua Conta Google (Segurança) e crie uma
 
 *Alternativa:* com um domínio próprio, dá para usar a Resend no lugar do Gmail — basta criar o segredo `RESEND_API_KEY` (e `EMAIL_FROM`) em vez dos dois do Gmail.
 
+## Visitante × corretor
+
+Ao entrar, a pessoa escolhe **Visitante** ou **Corretor**. Corretor informa o CRECI e fica como visitante até ser aprovado na aba **Aprovações** por outros corretores. O administrador define, em **Conta → Equipe**, quem pode aprovar (corretores e admins, ou só admins) e quantas aprovações são necessárias (1 a 5); o voto do admin decide na hora, e ele pode mudar o papel de qualquer pessoa diretamente. O primeiro usuário do site vira administrador automaticamente.
+
 ## Papéis
 
 | Papel | Pode |
 |---|---|
-| Cliente | ver imóveis, favoritar, enviar interesse, editar o próprio perfil |
+| Visitante | ver imóveis, favoritar, enviar interesse, editar o próprio perfil |
 | Corretor | tudo acima + cadastrar imóveis (vão para aprovação), editar/excluir os seus, ver interessados e visitas deles, painel |
 | Admin | tudo + publicar/rejeitar anúncios, editar qualquer imóvel e promover usuários em **Conta → Equipe** |
 

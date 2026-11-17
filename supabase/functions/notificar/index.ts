@@ -6,6 +6,7 @@
 //   • visita pedida / respondida   → corretor / interessado
 //   • anúncio aguardando aprovação → administradores
 //   • anúncio publicado            → dono do anúncio + buscas salvas que combinam
+//   • pedido de acesso de corretor → quem pode aprovar; decisão → quem pediu
 //
 //  Segredos (Edge Functions → Secrets):
 //   WEBHOOK_SECRET      o mesmo valor usado em supabase/notificacoes.sql
@@ -191,6 +192,31 @@ async function onImovel(id: string, evento: string, anterior?: string) {
   }
 }
 
+
+async function onSolicitacao(id: string) {
+  const { data: s } = await db.from("solicitacoes_corretor").select("*").eq("id", id).maybeSingle();
+  if (!s) return;
+  const pessoa = await perfil(s.user_id);
+  if (s.status === "pendente") {
+    const { data: cfg } = await db.from("configuracoes").select("quem_aprova").eq("id", 1).maybeSingle();
+    const papeis = cfg?.quem_aprova === "admin" ? ["admin"] : ["admin", "corretor"];
+    const { data: aprovadores } = await db.from("profiles").select("email").in("papel", papeis).neq("id", s.user_id);
+    await enviar((aprovadores || []).map((a) => a.email), `Pedido de acesso de corretor: ${pessoa?.nome || "novo usuário"}`,
+      layout("Novo pedido de acesso de corretor",
+        `<p><b>${esc(pessoa?.nome || "Alguém")}</b> (${esc(pessoa?.email || "")}) quer anunciar imóveis na Alvar.</p>
+         <p>CRECI: ${esc(s.creci)}${s.telefone ? `<br>Telefone: ${esc(s.telefone)}` : ""}</p>
+         ${s.mensagem ? `<blockquote style="margin:14px 0;padding:12px 16px;background:#F6F2EC;border-left:3px solid #B8552F;border-radius:6px">${esc(s.mensagem)}</blockquote>` : ""}`,
+        { texto: "Aprovar ou recusar", url: `${SITE}/conta.html#aprovacoes` }));
+  } else if (pessoa?.email) {
+    const ok = s.status === "aprovada";
+    await enviar(pessoa.email, ok ? "Seu acesso de corretor foi aprovado" : "Sobre seu pedido de acesso de corretor",
+      layout(ok ? "Bem-vindo à equipe Alvar 🎉" : "Seu pedido não foi aprovado",
+        ok ? `<p>${esc(primeiroNome(pessoa))}, seu acesso de corretor está liberado. Você já pode cadastrar imóveis.</p>`
+           : `<p>${esc(primeiroNome(pessoa))}, a equipe não aprovou seu acesso de corretor desta vez. Você pode revisar os dados e pedir novamente na sua conta.</p>`,
+        { texto: ok ? "Cadastrar imóvel" : "Ver minha conta", url: ok ? `${SITE}/conta.html#novo` : `${SITE}/conta.html#perfil` }));
+  }
+}
+
 const norm = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 function combinaFiltros(f: any, i: any) {
   const q = norm(f.q);
@@ -209,6 +235,7 @@ Deno.serve(async (req) => {
     else if (tabela === "leads") await onLead(id);
     else if (tabela === "visitas") await onVisita(id, evento);
     else if (tabela === "imoveis") await onImovel(id, evento, anterior);
+    else if (tabela === "solicitacoes_corretor") await onSolicitacao(id);
     return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
     console.error(e);

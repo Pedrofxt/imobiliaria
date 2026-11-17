@@ -1,17 +1,19 @@
-import { $, $$, esc, api, auth, chat, refreshUnread, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML, visitas, VISITA_STATUS, buscas, matchFiltros, filtrosLabel, isPublicado, SITUACOES, ETAPAS, loadLeaflet, tileLayer, geocode, num } from './core.js';
+import { $, $$, esc, api, auth, chat, refreshUnread, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML, visitas, VISITA_STATUS, buscas, corretores, podeAprovar, tipoPicker, onboardingModal, matchFiltros, filtrosLabel, isPublicado, SITUACOES, ETAPAS, loadLeaflet, tileLayer, geocode, num } from './core.js';
 
 renderChrome('anunciar');
 const root = $('#conta');
 let IMOVEIS = null;
+let CONFIG = { quem_aprova: 'equipe', aprovacoes_necessarias: 1 };
 const loadImoveis = async (force = false) => { if (!IMOVEIS || force) IMOVEIS = await api.listImoveis(); return IMOVEIS; };
 
 // ---------------------------------------------------------
 function renderLogin() {
   root.innerHTML = `
-    <div class="panel login-card reveal">
+    <div class="panel login-card reveal" data-login-box>
       ${LOGO}
       <h1>Sua conta Alvar</h1>
-      <p class="muted">Entre para salvar favoritos, acompanhar seus interesses e — se você for da equipe — cadastrar imóveis.</p>
+      <p class="muted">Como você quer usar a Alvar?</p>
+      ${tipoPicker(location.hash === '#novo' ? 'corretor' : undefined)}
       ${googleBtn('Entrar com Google')}
       <details style="margin-top:1.2rem;text-align:left">
         <summary class="muted" style="cursor:pointer;font-size:.88rem;text-align:center">Já criei uma senha — entrar com e-mail</summary>
@@ -21,7 +23,7 @@ function renderLogin() {
           <button class="btn" type="submit" style="margin-top:.2rem">Entrar</button>
         </form>
       </details>
-      <p class="muted" style="font-size:.78rem;margin-top:1.2rem">${DEMO ? 'Modo demonstração: você entra como administrador fictício.' : 'Usamos apenas seu nome, e-mail e foto do Google.'}</p>
+      <p class="muted" style="font-size:.78rem;margin-top:1.2rem">${DEMO ? 'Modo demonstração: você entra como administrador fictício.' : 'Corretores entram como visitantes até a equipe aprovar o acesso.'}</p>
       <p class="muted" style="font-size:.75rem;margin-top:.4rem">Ao entrar, você concorda com os <a href="./termos.html" style="text-decoration:underline">Termos de Serviço</a> e a <a href="./privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p>
     </div>`;
   bindLoginButtons(root); observeReveal(root);
@@ -43,19 +45,21 @@ const TABS = [
   { id: 'imoveis', label: 'Meus imóveis', ic: 'grid', staff: true },
   { id: 'novo', label: 'Cadastrar imóvel', ic: 'plus', staff: true },
   { id: 'leads', label: 'Interessados', ic: 'inbox', staff: true },
+  { id: 'aprovacoes', label: 'Aprovações', ic: 'check', aprova: true },
   { id: 'equipe', label: 'Equipe', ic: 'users', admin: true },
   { id: 'seguranca', label: 'Segurança', ic: 'shield' },
 ];
 
 function renderShell() {
   const p = auth.profile || { nome: auth.user.email, email: auth.user.email, papel: 'cliente' };
-  const tabs = TABS.filter((t) => (!t.staff || isStaff()) && (!t.admin || isAdmin()));
+  const tabs = TABS.filter((t) => (!t.staff || isStaff()) && (!t.admin || isAdmin()) && (!t.aprova || podeAprovar(CONFIG)));
   root.innerHTML = `
     <div class="panel profile-card reveal">
       ${avatarHTML(p, 'lg')}
       <div style="flex:1;min-width:0"><span class="eyebrow">Minha conta</span><h1 style="font-size:clamp(1.6rem,3vw,2.3rem)">Olá, ${esc((p.nome || '').split(' ')[0] || 'bem-vindo')}</h1><span class="muted" style="font-size:.88rem">${esc(p.email || '')}</span> <span class="role-pill">${esc(PAPEIS[p.papel] || 'Cliente')}</span></div>
       ${isStaff() ? `<a class="btn btn-accent" href="#novo">${icon('plus')} Novo imóvel</a>` : ''}
     </div>
+    <div id="sol-banner"></div>
     <div class="account">
       <nav class="side-nav">${tabs.map((t) => `<button data-tab="${t.id}">${icon(t.ic)} ${t.label}${t.count ? `<span class="count" data-count-for="${t.id}">${t.count()}</span>` : ''}</button>`).join('')}</nav>
       <div>${tabs.map((t) => `<section class="tab" id="tab-${t.id}"></section>`).join('')}
@@ -65,6 +69,19 @@ function renderShell() {
   $$('.side-nav button').forEach((b) => b.onclick = () => { history.replaceState(null, '', (b.dataset.tab === 'novo' ? location.pathname : location.pathname + location.search) + '#' + b.dataset.tab); route(); });
   observeReveal(root);
   refreshCounts();
+  solBanner();
+}
+
+// Situação do pedido de acesso de corretor (para quem ainda é visitante)
+async function solBanner() {
+  const box = $('#sol-banner'); if (!box || isStaff()) return;
+  let sol = null; try { sol = await corretores.minha(); } catch {}
+  if (!sol) return;
+  let votos = []; try { votos = await corretores.votosDe(sol.id); } catch {}
+  const sim = votos.filter((v) => v.voto === 'aprovar').length;
+  if (sol.status === 'pendente') box.innerHTML = `<div class="draft-banner">${icon('clock')}<span><b>Seu acesso de corretor está em análise.</b> ${sim ? `${sim} de ${CONFIG.aprovacoes_necessarias} ${CONFIG.aprovacoes_necessarias === 1 ? 'aprovação' : 'aprovações'}. ` : ''}Enquanto isso, você usa a Alvar como visitante.</span></div>`;
+  else if (sol.status === 'rejeitada') box.innerHTML = `<div class="draft-banner" style="border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:color-mix(in srgb,var(--danger) 10%,transparent)">${icon('x')}<span><b>Seu pedido de acesso de corretor não foi aprovado.</b> Você pode revisar os dados e pedir de novo.</span><button class="btn btn-ghost btn-sm" id="sol-again" style="margin-left:auto">Pedir de novo</button></div>`;
+  $('#sol-again')?.addEventListener('click', () => onboardingModal('corretor', { obrigatorio: false }));
 }
 
 // Números ao lado das abas (visitas a confirmar, anúncios a aprovar, novidades nas buscas)
@@ -77,6 +94,7 @@ function setCount(tab, n) {
 }
 async function refreshCounts() {
   const me = auth.user.id;
+  if (podeAprovar(CONFIG)) { try { const sl = await corretores.list(); setCount('aprovacoes', sl.filter((x) => x.status === 'pendente' && x.user_id !== me && !(x.votos || []).some((v) => v.aprovador_id === me)).length); } catch {} }
   try { const v = await visitas.list(); setCount('visitas', v.filter((x) => x.corretor_id === me && x.status === 'pendente' && new Date(x.data_hora) > new Date()).length); } catch {}
   try {
     const [bs, all] = await Promise.all([buscas.list(), loadImoveis()]);
@@ -88,17 +106,22 @@ async function refreshCounts() {
 function route() {
   let id = location.hash.slice(1) || 'perfil';
   const staffOnly = ['imoveis', 'novo', 'leads', 'painel'];
-  if ((staffOnly.includes(id) && !isStaff()) || (id === 'equipe' && !isAdmin())) id = 'restrito';
+  if ((staffOnly.includes(id) && !isStaff()) || (id === 'equipe' && !isAdmin()) || (id === 'aprovacoes' && !podeAprovar(CONFIG))) id = 'restrito';
   if (!$('#tab-' + id)) id = 'perfil';
   $$('.side-nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === id));
   $$('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + id));
-  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca, chat: tabChat, visitas: tabVisitas, buscas: tabBuscas, painel: tabPainel })[id]?.();
+  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca, chat: tabChat, visitas: tabVisitas, buscas: tabBuscas, painel: tabPainel, aprovacoes: tabAprovacoes })[id]?.();
   if (id !== 'chat' && stopChat) { stopChat(); stopChat = null; }
 }
 
 // ---------------------------------------------------------
 function tabRestrito() {
-  $('#tab-restrito').innerHTML = `<div class="panel" style="text-align:center;padding:3rem 2rem"><div style="font-size:2.6rem;color:var(--accent);display:grid;place-items:center">${icon('shield')}</div><h2 style="font-size:1.8rem;margin:.8rem 0 .4rem">Área da equipe</h2><p class="muted" style="max-width:44ch;margin:0 auto">Cadastrar e gerenciar imóveis é exclusivo para corretores. Peça a um administrador da Alvar para liberar seu acesso — ele faz isso em <b>Conta → Equipe</b>.</p></div>`;
+  $('#tab-restrito').innerHTML = `<div class="panel" style="text-align:center;padding:3rem 2rem"><div style="font-size:2.6rem;color:var(--accent);display:grid;place-items:center">${icon('shield')}</div><h2 style="font-size:1.8rem;margin:.8rem 0 .4rem">Área da equipe</h2><p class="muted" style="max-width:44ch;margin:0 auto">Cadastrar e gerenciar imóveis é exclusivo para corretores aprovados pela equipe.</p><button class="btn btn-accent" id="req-corretor" style="margin-top:1.2rem">${icon('key')} Pedir acesso de corretor</button></div>`;
+  corretores.minha().then((sol) => {
+    const b = $('#req-corretor'); if (!b) return;
+    if (sol?.status === 'pendente') { b.disabled = true; b.innerHTML = `${icon('clock')} Pedido em análise`; }
+    else b.onclick = () => onboardingModal('corretor', { obrigatorio: false });
+  }).catch(() => { const b = $('#req-corretor'); if (b) b.onclick = () => onboardingModal('corretor', { obrigatorio: false }); });
 }
 
 function tabPerfil() {
@@ -115,7 +138,13 @@ function tabPerfil() {
       ${isStaff() ? `<div class="form-row"><div class="field"><label>Cargo</label><input name="cargo" value="${esc(p.cargo || '')}" placeholder="Corretor · Locação"></div><div class="field"><label>CRECI</label><input name="creci" value="${esc(p.creci || '')}" placeholder="CRECI-PR 00.000"></div></div>
       <div class="field"><label>Bio (aparece na página da equipe)</label><textarea name="bio" style="min-height:100px">${esc(p.bio || '')}</textarea></div>` : ''}
       <div><button class="btn btn-accent" type="submit">${icon('check')} Salvar perfil</button></div>
-    </form>`;
+    </form>
+    ${!isStaff() ? `<div class="panel" style="margin-top:1.2rem;display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><h3 style="font-size:1.2rem">Você é corretor?</h3><p class="muted" style="margin:.2rem 0 0;font-size:.9rem">Peça acesso para anunciar imóveis. A equipe da Alvar aprova.</p></div><button class="btn btn-ghost btn-sm" id="perfil-req">${icon('key')} Pedir acesso de corretor</button></div>` : ''}`;
+  $('#perfil-req')?.addEventListener('click', async () => {
+    const sol = await corretores.minha().catch(() => null);
+    if (sol?.status === 'pendente') { toast('Seu pedido já está em análise.'); return; }
+    onboardingModal('corretor', { obrigatorio: false });
+  });
   let avatarUrl = null;
   $('#av-file').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
@@ -602,14 +631,29 @@ async function tabPainel() {
 async function tabEquipe() {
   const t = $('#tab-equipe');
   t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Administração</span><h2>Equipe e acessos</h2></div></div>
-    <p class="muted" style="margin-top:-.8rem">Todo mundo que entra com o Google aparece aqui como <b>cliente</b>. Promova a <b>corretor</b> para liberar o cadastro de imóveis.</p>
+    <div class="panel form" style="margin-bottom:1.2rem">
+      <h3 style="font-size:1.3rem">Aprovação de novos corretores</h3>
+      <p class="muted" style="margin:0;font-size:.9rem">Quem escolhe “Corretor” ao entrar fica como visitante até ser aprovado. Seu voto de administrador sempre decide na hora.</p>
+      <div class="config-grid">
+        <div class="field"><label>Quem pode aprovar</label><select id="cfg-quem"><option value="equipe" ${CONFIG.quem_aprova === 'equipe' ? 'selected' : ''}>Corretores e administradores</option><option value="admin" ${CONFIG.quem_aprova === 'admin' ? 'selected' : ''}>Somente administradores</option></select></div>
+        <div class="field"><label>Aprovações necessárias</label><select id="cfg-n">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${CONFIG.aprovacoes_necessarias === n ? 'selected' : ''}>${n} ${n === 1 ? 'aprovação' : 'aprovações'}</option>`).join('')}</select></div>
+      </div>
+      <div><button class="btn btn-sm" id="cfg-save">${icon('check')} Salvar regras</button></div>
+    </div>
+    <p class="muted" style="margin:0 0 .8rem">Você também pode mudar o papel de qualquer pessoa diretamente: <b>Visitante</b>, <b>Corretor</b> ou <b>Administrador</b>.</p>
     <div id="eq-box"><div class="skeleton" style="height:200px"></div></div>`;
+  $('#cfg-save').onclick = async () => {
+    const patch = { quem_aprova: $('#cfg-quem').value, aprovacoes_necessarias: +$('#cfg-n').value };
+    try { await corretores.salvarConfig(patch); CONFIG = { ...CONFIG, ...patch }; toast('Regras de aprovação salvas'); renderShell(); history.replaceState(null, '', location.pathname + '#equipe'); route(); }
+    catch (e) { toast(e.message, 'err'); }
+  };
   try {
     const users = await api.listProfiles();
     $('#eq-box').innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Usuário</th><th>Papel</th><th>Cargo</th><th>CRECI</th><th></th></tr></thead>
+      <thead><tr><th>Usuário</th><th>Entrou como</th><th>Papel</th><th>Cargo</th><th>CRECI</th><th></th></tr></thead>
       <tbody>${users.map((u) => `<tr data-u="${esc(u.id)}">
         <td><div class="agent">${avatarHTML(u)}<div><strong>${esc(u.nome || '—')}</strong><span>${esc(u.email || '')}</span></div></div></td>
+        <td>${u.tipo_conta === 'corretor' ? (u.papel === 'cliente' ? '<span class="pill pendente">Corretor (aguardando)</span>' : '<span class="pill publicado">Corretor</span>') : u.tipo_conta === 'visitante' ? '<span class="pill rascunho">Visitante</span>' : '<span class="muted" style="font-size:.8rem">—</span>'}</td>
         <td><select class="select" data-k="papel" ${u.id === auth.user.id ? 'disabled title="Você não pode alterar o próprio papel"' : ''}>${Object.entries(PAPEIS).map(([k, l]) => `<option value="${k}" ${u.papel === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
         <td><input class="input" data-k="cargo" value="${esc(u.cargo || '')}" placeholder="Cargo" style="min-width:160px"></td>
         <td><input class="input" data-k="creci" value="${esc(u.creci || '')}" placeholder="CRECI" style="min-width:130px"></td>
@@ -619,7 +663,7 @@ async function tabEquipe() {
       const tr = b.closest('tr'); const patch = {};
       $$('[data-k]', tr).forEach((el) => { if (!el.disabled) patch[el.dataset.k] = el.value; });
       b.disabled = true;
-      try { await api.updateProfile(patch, tr.dataset.u); toast('Usuário atualizado'); } catch (e) { toast(e.message, 'err'); }
+      try { await api.updateProfile(patch, tr.dataset.u); toast('Usuário atualizado'); refreshCounts(); } catch (e) { toast(e.message, 'err'); }
       b.disabled = false;
     });
   } catch (e) { $('#eq-box').innerHTML = dbErrorHTML(e); }
@@ -755,6 +799,54 @@ async function tabChat() {
   if (alvo && convs.some((c) => c.id === alvo)) abrir(alvo); else empty();
 }
 
+
+// ---------------------------------------------------------
+//  Aprovações de novos corretores
+// ---------------------------------------------------------
+async function tabAprovacoes() {
+  const t = $('#tab-aprovacoes');
+  const n = CONFIG.aprovacoes_necessarias;
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Novos corretores</span><h2>Aprovações</h2></div></div>
+    <p class="muted" style="margin-top:-.8rem">Cada pedido precisa de <b>${n} ${n === 1 ? 'aprovação' : 'aprovações'}</b> ${CONFIG.quem_aprova === 'admin' ? 'de administradores' : 'de corretores ou administradores'}.${isAdmin() ? ' Como administrador, seu voto decide na hora.' : ''}</p>
+    <div id="ap-box"><div class="skeleton" style="height:140px"></div></div>`;
+  let list;
+  try { list = await corretores.list(); } catch (e) { $('#ap-box').innerHTML = dbErrorHTML(e); return; }
+  const me = auth.user.id;
+  const card = (s) => {
+    const p = s.perfil || {}; const votos = s.votos || [];
+    const sim = votos.filter((v) => v.voto === 'aprovar').length, nao = votos.filter((v) => v.voto === 'rejeitar').length;
+    const meu = votos.find((v) => v.aprovador_id === me)?.voto;
+    const tel = onlyDigits(s.telefone || p.telefone);
+    return `<div class="panel sol-card">
+      ${avatarHTML(p, 'lg')}
+      <div style="min-width:0">
+        <h4>${esc(p.nome || p.email || '—')} <span class="pill ${s.status}">${{ pendente: 'Aguardando', aprovada: 'Aprovado', rejeitada: 'Não aprovado' }[s.status]}</span></h4>
+        <div class="meta"><span>${icon('key')} ${esc(s.creci)}</span>${p.email ? `<a href="mailto:${esc(p.email)}">${icon('mail')} ${esc(p.email)}</a>` : ''}${tel ? `<a href="https://wa.me/${tel.startsWith('55') ? tel : '55' + tel}" target="_blank" rel="noopener">${icon('phone')} ${esc(s.telefone || p.telefone)}</a>` : ''}<span>${icon('clock')} ${fmtDate(s.created_at)}</span></div>
+        ${s.mensagem ? `<blockquote>${esc(s.mensagem)}</blockquote>` : ''}
+        <div class="votes"><span class="vote-bar">${Array.from({ length: n }, (_, i) => `<i class="${i < sim ? 'on' : ''}"></i>`).join('')}</span> ${sim}/${n} ${n === 1 ? 'aprovação' : 'aprovações'}${nao ? ` · ${nao} contra` : ''}${votos.length ? ` · ${votos.map((v) => esc(v.aprovador?.nome?.split(' ')[0] || '—') + (v.voto === 'aprovar' ? ' ✓' : ' ✕')).join(', ')}` : ''}</div>
+      </div>
+      <div class="row-actions">
+        ${s.status === 'pendente' && s.user_id !== me ? `
+          <button class="btn btn-sm ${meu === 'aprovar' ? '' : ''}" data-vote="aprovar" data-s="${esc(s.id)}" ${meu === 'aprovar' ? 'disabled' : ''}>${icon('check')} ${meu === 'aprovar' ? 'Você aprovou' : 'Aprovar'}</button>
+          <button class="btn btn-ghost btn-sm" data-vote="rejeitar" data-s="${esc(s.id)}" ${meu === 'rejeitar' ? 'disabled' : ''}>${meu === 'rejeitar' ? 'Você recusou' : 'Recusar'}</button>` : ''}
+      </div>
+    </div>`;
+  };
+  const pend = list.filter((s) => s.status === 'pendente'), dec = list.filter((s) => s.status !== 'pendente').slice(0, 20);
+  $('#ap-box').innerHTML = (pend.length ? `<div class="list">${pend.map(card).join('')}</div>` : `<div class="empty"><h3>Nenhum pedido aguardando</h3><p>Quando alguém escolher “Corretor” ao entrar, o pedido aparece aqui.</p></div>`)
+    + (dec.length ? `<h3 class="sub-title">Decididos recentemente</h3><div class="list">${dec.map(card).join('')}</div>` : '');
+  $$('[data-vote]', t).forEach((b) => b.onclick = async () => {
+    const voto = b.dataset.vote;
+    if (voto === 'rejeitar' && !(await confirmBox(isAdmin() ? 'Recusar este pedido? Como administrador, isso encerra o pedido.' : 'Votar para recusar este pedido?', 'Recusar'))) return;
+    b.disabled = true;
+    try {
+      const r = await corretores.votar(b.dataset.s, voto);
+      toast(r === 'aprovada' ? 'Corretor aprovado! O acesso já está liberado.' : r === 'rejeitada' ? 'Pedido recusado.' : 'Voto registrado. Aguardando outros aprovadores.');
+      tabAprovacoes(); refreshCounts();
+    } catch (e) { toast(e.message, 'err'); b.disabled = false; }
+  });
+}
+
 // ---------------------------------------------------------
 //  Segurança: senha e exclusão de conta
 // ---------------------------------------------------------
@@ -828,6 +920,8 @@ function tabSeguranca() {
 // ---------------------------------------------------------
 async function boot() {
   await initAuth();
+  try { CONFIG = await corretores.config(); } catch {}
+  addEventListener('alvar:tipo', () => { if (auth.user) { renderShell(); route(); } });
   let lastUser;
   onAuth(() => {
     if (auth.user?.id === lastUser && root.dataset.ready) return;
