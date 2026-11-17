@@ -243,7 +243,7 @@ async function tabNovo() {
   try {
     [equipe, im] = await Promise.all([api.listEquipe(), editId ? api.getImovel(editId) : null]);
   } catch (e) { t.innerHTML = dbErrorHTML(e); return; }
-  const v = im || { finalidade: 'venda', tipo: 'casa', status: 'disponivel', estado: 'PR', responsavel_id: auth.user.id, comodidades: [] };
+  const v = im || { finalidade: 'venda', tipo: 'casa', status: 'disponivel', estado: 'PR', responsavel_id: equipe.some((p) => p.id === auth.user.id) ? auth.user.id : (equipe[0]?.id || ''), comodidades: [] };
   const extras = (v.comodidades || []).filter((c) => !COMODIDADES.includes(c));
   let fotos = (im?.imovel_fotos || []).map((f) => ({ ...f, preview: f.url }));
   const removidas = [];
@@ -315,7 +315,8 @@ async function tabNovo() {
 
       <div class="panel form">
         <h3 style="font-size:1.3rem">Responsável pelo imóvel</h3>
-        <div class="field"><label>Corretor responsável</label><select name="responsavel_id">${equipe.map((p) => `<option value="${esc(p.id)}" ${p.id === v.responsavel_id ? 'selected' : ''}>${esc(p.nome || p.email)}${p.creci ? ' — ' + esc(p.creci) : ''}</option>`).join('')}</select></div>
+        <div class="field"><label>Corretor responsável</label><select name="responsavel_id">${equipe.map((p) => `<option value="${esc(p.id)}" ${p.id === v.responsavel_id ? 'selected' : ''}>${esc(p.nome || p.email)}${p.creci ? ' — ' + esc(p.creci) : ''}</option>`).join('')}<option value="" ${!equipe.some((p) => p.id === v.responsavel_id) ? 'selected' : ''}>Sem corretor definido (contato geral da Alvar)</option></select></div>
+        ${!equipe.length ? `<p class="notice" style="margin:0;font-size:.86rem">Ainda não há corretores aprovados. Aprove um em <b>Aprovações</b> ou mude o papel de alguém em <b>Equipe</b>.</p>` : ''}
         <p class="muted" style="font-size:.85rem;margin:0">Ele aparece na página do imóvel e recebe os interessados.</p>
       </div>
 
@@ -403,7 +404,7 @@ async function tabNovo() {
       area_m2: n('area_m2'), quartos: n('quartos') || 0, suites: n('suites') || 0, banheiros: n('banheiros') || 0, vagas: n('vagas') || 0,
       descricao: String(fd.get('descricao') || '').trim(), comodidades,
       cep: String(fd.get('cep') || '').trim(), endereco: String(fd.get('endereco') || '').trim(), bairro: String(fd.get('bairro') || '').trim(), cidade, estado: String(fd.get('estado') || '').trim().toUpperCase(),
-      responsavel_id: fd.get('responsavel_id') || auth.user.id,
+      responsavel_id: fd.get('responsavel_id') || null,
       latitude: n('latitude'), longitude: n('longitude'),
       situacao: situacao === 'rascunho' ? 'rascunho' : (isAdmin() ? 'publicado' : (im?.situacao === 'publicado' ? 'publicado' : 'pendente')),
     };

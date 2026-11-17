@@ -148,7 +148,7 @@ export function askLogin(motivo = 'Entre para continuar') {
 // ---------------------------------------------------------
 //  Banco local do modo demonstração
 // ---------------------------------------------------------
-const LS = 'alvar_demo_v2';
+const LS = 'alvar_demo_v3';
 function db() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS)); } catch {}
@@ -292,7 +292,7 @@ function updateFavBadge(pop = false) {
 // ---------------------------------------------------------
 //  API de dados (Supabase ou demo)
 // ---------------------------------------------------------
-const SEL = '*, imovel_fotos(id,url,path,ordem), responsavel:profiles!imoveis_responsavel_fk(id,nome,email,telefone,creci,cargo,avatar_url,bio)';
+const SEL = '*, imovel_fotos(id,url,path,ordem), responsavel:profiles!imoveis_responsavel_fk(id,nome,email,telefone,creci,cargo,avatar_url,bio,papel)';
 const sortFotos = (im) => { im.imovel_fotos = (im.imovel_fotos || []).sort((a, b) => a.ordem - b.ordem); return im; };
 const must = ({ data, error }) => { if (error) throw error; return data; };
 
@@ -307,8 +307,9 @@ export const api = {
     return data ? sortFotos(data) : null;
   },
   async listEquipe() {
-    if (DEMO) return db().profiles.filter((p) => ['corretor', 'admin'].includes(p.papel));
-    return must(await sb.from('profiles').select('*').in('papel', ['corretor', 'admin']).order('nome'));
+    // só corretores: administradores não são responsáveis por imóveis
+    if (DEMO) return db().profiles.filter((p) => p.papel === 'corretor');
+    return must(await sb.from('profiles').select('*').eq('papel', 'corretor').order('nome'));
   },
   async listProfiles() {
     if (DEMO) return db().profiles;

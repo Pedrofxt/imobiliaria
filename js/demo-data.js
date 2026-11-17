@@ -2,7 +2,7 @@
 const u = (id, w = 1600) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=75`;
 
 export const DEMO_PROFILES = [
-  { id: 'p-helena', nome: 'Helena Caravelas', email: 'helena@alvarimoveis.com.br', telefone: '41999990001', creci: 'CRECI-PR 41.221', cargo: 'Diretora comercial', bio: 'Vinte anos aproximando famílias de casas com alma. Especialista em alto padrão no litoral.', papel: 'admin', avatar_url: null },
+  { id: 'p-helena', nome: 'Helena Caravelas', email: 'helena@alvarimoveis.com.br', telefone: '41999990001', creci: 'CRECI-PR 41.221', cargo: 'Diretora comercial', bio: 'Vinte anos aproximando famílias de casas com alma. Especialista em alto padrão no litoral.', papel: 'corretor', avatar_url: null },
   { id: 'p-rafael', nome: 'Rafael Monteverde', email: 'rafael@alvarimoveis.com.br', telefone: '41999990002', creci: 'CRECI-PR 52.890', cargo: 'Corretor · Locação', bio: 'Locação residencial e corporativa. Responde rápido e conhece cada rua de Paranaguá.', papel: 'corretor', avatar_url: null },
   { id: 'p-iara', nome: 'Iara Tavares', email: 'iara@alvarimoveis.com.br', telefone: '41999990003', creci: 'CRECI-PR 60.114', cargo: 'Corretora · Lançamentos', bio: 'Apaixonada por arquitetura contemporânea e plantas inteligentes.', papel: 'corretor', avatar_url: null },
   { id: 'p-otavio', nome: 'Otávio Brandão', email: 'otavio@alvarimoveis.com.br', telefone: '41999990004', creci: 'CRECI-PR 47.302', cargo: 'Corretor · Terrenos e comercial', bio: 'Terrenos, galpões e salas comerciais. Olho de investidor.', papel: 'corretor', avatar_url: null },

@@ -704,3 +704,4 @@ details summary { list-style: none; }
 @media (max-width: 640px) { .sol-card { grid-template-columns: auto 1fr; } .sol-card .row-actions { grid-column: 1 / -1; justify-content: flex-start; } }
 .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 640px) { .config-grid { grid-template-columns: 1fr; } }
+.avatar.lg .logo-mark { width: 44px; height: 44px; color: #F6F2EC; }

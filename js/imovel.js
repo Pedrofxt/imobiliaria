@@ -1,4 +1,4 @@
-import { $, $$, esc, api, auth, chat, visitas, isPublicado, SITUACOES, getCompare, toggleCompare, loadLeaflet, tileLayer, askLogin, priceShort, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, num, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, TIPOS, FINALIDADES, STATUS, PLACEHOLDER, SITE, isAdmin, dbErrorHTML, bindLoginButtons } from './core.js';
+import { $, $$, esc, api, auth, chat, visitas, isPublicado, SITUACOES, getCompare, toggleCompare, loadLeaflet, tileLayer, askLogin, priceShort, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, num, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, TIPOS, FINALIDADES, STATUS, PLACEHOLDER, SITE, isAdmin, dbErrorHTML, bindLoginButtons, LOGO } from './core.js';
 
 renderChrome('imoveis');
 const root = $('#prop');
@@ -33,7 +33,8 @@ async function boot() {
 function render(im) {
   const fotos = im.imovel_fotos?.length ? im.imovel_fotos : [{ url: PLACEHOLDER }];
   const shown = fotos.slice(0, 5);
-  const r = im.responsavel;
+  // só corretores aparecem como responsáveis; sem corretor → contato geral da Alvar
+  const r = im.responsavel && (im.responsavel.papel || 'corretor') === 'corretor' ? im.responsavel : null;
   const tel = onlyDigits(r?.telefone || SITE.whatsapp);
   const wa = `https://wa.me/${tel.startsWith('55') ? tel : '55' + tel}?text=${encodeURIComponent(`Olá! Tenho interesse no imóvel "${im.titulo}" (${location.href})`)}`;
   const endereco = [im.endereco, im.bairro, im.cidade, im.estado].filter(Boolean).join(', ');
@@ -130,7 +131,15 @@ function render(im) {
             <a class="btn btn-sm" href="${wa}" target="_blank" rel="noopener">${icon('phone')} WhatsApp</a>
             ${r.email ? `<a class="btn btn-ghost btn-sm" href="mailto:${esc(r.email)}">${icon('mail')} E-mail</a>` : ''}
           </div>
-        </div>` : ''}
+        </div>` : `<div class="panel reveal" style="--d:.1s">
+          <span class="eyebrow">Atendimento</span>
+          <div class="agent" style="margin-top:1rem"><span class="avatar lg" style="background:var(--pine)">${LOGO}</span><div><strong>Equipe Alvar</strong><span>Um corretor vai te atender</span></div></div>
+          <button class="btn btn-accent" id="open-chat" style="width:100%;margin-top:1.1rem">${icon('chat')} Conversar com a equipe</button>
+          <div class="agent-links">
+            <a class="btn btn-sm" href="${wa}" target="_blank" rel="noopener">${icon('phone')} WhatsApp</a>
+            <a class="btn btn-ghost btn-sm" href="mailto:${esc(SITE.email)}">${icon('mail')} E-mail</a>
+          </div>
+        </div>`}
       </aside>
     </div>`;
 
@@ -161,7 +170,7 @@ function render(im) {
     try {
       await api.createLead({ imovel_id: im.id, nome, email, telefone, mensagem });
       let convId = null;
-      if (auth.user && r && auth.user.id !== r.id) {
+      if (auth.user && (!r || auth.user.id !== r.id)) {
         try { convId = await chat.open(im.id); await chat.send(convId, `📩 ${mensagem || 'Tenho interesse neste imóvel.'}${telefone ? `\nTelefone: ${telefone}` : ''}`); } catch {}
       }
       btn.innerHTML = `${icon('check')} Interesse enviado`;

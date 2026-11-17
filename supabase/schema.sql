@@ -801,3 +801,28 @@ $$;
 drop trigger if exists profiles_sincroniza_tipo on public.profiles;
 create trigger profiles_sincroniza_tipo before update of papel on public.profiles
   for each row execute function public.papel_sincroniza_tipo();
+
+-- ---------------------------------------------------------
+--  Responsável por imóvel é sempre um corretor (admin não)
+-- ---------------------------------------------------------
+create or replace function public.imovel_responsavel_corretor() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.responsavel_id is not null and not exists (select 1 from public.profiles where id = new.responsavel_id and papel = 'corretor') then
+    new.responsavel_id := null;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists imoveis_responsavel_corretor on public.imoveis;
+create trigger imoveis_responsavel_corretor before insert or update of responsavel_id on public.imoveis
+  for each row execute function public.imovel_responsavel_corretor();
+-- imóveis que estavam com um administrador como responsável ficam com o contato geral
+update public.imoveis i set responsavel_id = null
+  where responsavel_id is not null and not exists (select 1 from public.profiles p where p.id = i.responsavel_id and p.papel = 'corretor');
+
+-- Página pública da equipe mostra só corretores
+drop policy if exists "perfis: equipe é pública" on public.profiles;
+create policy "perfis: equipe é pública" on public.profiles for select
+  using (papel = 'corretor' or id = auth.uid() or public.is_staff()
+         or (auth.uid() is not null and papel = 'admin'));
