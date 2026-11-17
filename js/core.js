@@ -177,7 +177,6 @@ export async function initAuth() {
     const { data } = await sb.auth.getSession();
     auth.user = data.session?.user || null;
     sb.auth.onAuthStateChange(async (_ev, session) => {
-      if (_ev === 'PASSWORD_RECOVERY') { auth.recovery = true; setTimeout(() => dispatchEvent(new Event('alvar:recovery')), 0); }
       const changed = (session?.user?.id || null) !== (auth.user?.id || null);
       auth.user = session?.user || null;
       if (changed) { await loadProfile(); await refreshFavs(); emit(); }
@@ -357,12 +356,6 @@ export const api = {
     if (DEMO) { const d = db(); const p = d.profiles.find((x) => x.id === id); Object.assign(p, patch); save(d); }
     else must(await sb.from('profiles').update(patch).eq('id', id));
     if (id === auth.user.id) { await loadProfile(); emit(); }
-  },
-  async resetPassword(email) {
-    if (DEMO) return;
-    const redirectTo = location.origin + location.pathname.replace(/[^/]*$/, '') + 'conta.html#seguranca';
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
-    if (error) throw error;
   },
   async setLeadEtapa(id, etapa) {
     if (DEMO) { const d = db(); const l = d.leads.find((x) => x.id === id); if (l) l.etapa = etapa; save(d); return; }

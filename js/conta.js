@@ -19,7 +19,6 @@ function renderLogin() {
           <div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div>
           <div class="field"><label>Senha</label><input type="password" name="senha" required autocomplete="current-password"></div>
           <button class="btn" type="submit" style="margin-top:.2rem">Entrar</button>
-          <button type="button" class="muted" id="forgot" style="font-size:.84rem;text-decoration:underline;justify-self:center">Esqueci minha senha</button>
         </form>
       </details>
       <p class="muted" style="font-size:.78rem;margin-top:1.2rem">${DEMO ? 'Modo demonstração: você entra como administrador fictício.' : 'Usamos apenas seu nome, e-mail e foto do Google.'}</p>
@@ -32,44 +31,7 @@ function renderLogin() {
     try { await signInWithPassword(e.target.email.value.trim(), e.target.senha.value); }
     catch (err) { toast(err.message, 'err'); b.disabled = false; }
   };
-  $('#forgot').onclick = () => {
-    const { el, close } = modal(`
-      <h3 style="font-size:1.6rem;margin-bottom:.4rem">Recuperar senha</h3>
-      <p class="muted" style="margin-top:0">Enviamos um link para você criar uma senha nova. Se você só entra com o Google, use o botão do Google — não precisa de senha.</p>
-      <form class="form" id="fg-form"><div class="field"><label>E-mail da conta</label><input type="email" id="fg-email" required autocomplete="email" value="${esc($('#pw-login').email.value)}"></div>
-      <button class="btn btn-accent" type="submit">Enviar link</button></form>`);
-    el.querySelector('#fg-form').onsubmit = async (ev) => {
-      ev.preventDefault();
-      const btn = ev.target.querySelector('button'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Enviando…';
-      try {
-        await api.resetPassword(el.querySelector('#fg-email').value.trim());
-        el.querySelector('.modal-box').innerHTML = `<h3 style="font-size:1.6rem;margin-bottom:.4rem">Confira seu e-mail</h3><p class="muted">Se existir uma conta com esse endereço, você vai receber um link em instantes. Ele abre esta página para você definir a senha nova.</p><button class="btn" style="margin-top:1rem" onclick="this.closest('.modal').click()">Entendi</button>`;
-      } catch (err) { toast(err.message, 'err'); btn.disabled = false; btn.textContent = 'Enviar link'; }
-    };
-  };
 }
-
-// Link de recuperação de senha: o Supabase devolve logado com o evento PASSWORD_RECOVERY
-function recoveryModal() {
-  if (document.querySelector('#rc-form')) return;
-  const { el, close } = modal(`
-    <h3 style="font-size:1.6rem;margin-bottom:.4rem">Crie sua nova senha</h3>
-    <p class="muted" style="margin-top:0">Você entrou pelo link de recuperação. Defina a senha nova abaixo.</p>
-    <form class="form" id="rc-form">
-      <div class="field"><label>Nova senha</label><input type="password" id="rc-1" minlength="8" required autocomplete="new-password"></div>
-      <div class="field"><label>Confirmar</label><input type="password" id="rc-2" minlength="8" required autocomplete="new-password"></div>
-      <button class="btn btn-accent" type="submit">Salvar nova senha</button>
-    </form>`);
-  el.querySelector('#rc-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const a = el.querySelector('#rc-1').value, b = el.querySelector('#rc-2').value;
-    if (a.length < 8) return toast('Mínimo de 8 caracteres.', 'err');
-    if (a !== b) return toast('As senhas não conferem.', 'err');
-    try { await api.changePassword(a); auth.recovery = false; close(); toast('Senha atualizada! Você já está conectado.'); }
-    catch (err) { toast(err.message, 'err'); }
-  };
-}
-addEventListener('alvar:recovery', recoveryModal);
 
 const TABS = [
   { id: 'perfil', label: 'Perfil', ic: 'user' },
@@ -874,7 +836,6 @@ async function boot() {
     if (!auth.user) renderLogin(); else { renderShell(); route(); }
   });
   addEventListener('hashchange', () => auth.user && route());
-  if (auth.recovery) recoveryModal();
   finishLoading();
 }
 boot();

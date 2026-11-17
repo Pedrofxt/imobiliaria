@@ -14,7 +14,7 @@ Site de imobiliária **fictícia** no estilo e-commerce: catálogo com filtros, 
 - **Buscas salvas** com alerta de imóvel novo (no site e por e-mail)
 - Página do imóvel com galeria, **agendamento de visita**, **simulador de financiamento** (SAC/Price), mapa e chat com o corretor
 - "Tenho interesse" vira conversa no chat automaticamente; proteção anti-robô e anti-spam
-- Conta: perfil, mensagens em tempo real, visitas, favoritos, buscas salvas, segurança (senha do site, recuperação, exclusão de conta)
+- Conta: perfil, mensagens em tempo real, visitas, favoritos, buscas salvas, segurança (senha do site, exclusão de conta)
 - Equipe: **painel com números**, imóveis com **rascunho → aprovação**, interessados com **etapas** (novo → fechado), gestão de usuários
 - Avisos por e-mail (Edge Function, enviando pelo Gmail)
 
@@ -56,18 +56,12 @@ Se você já rodou uma versão antiga do `schema.sql`, rode na ordem: `chat.sql`
 
 ## E-mails pelo Gmail (sem domínio)
 
-Tudo funciona com o seu Gmail como remetente — sem domínio e sem serviço pago. O Google limita a quantidade de envios por dia, o que basta para um projeto de demonstração.
+Os avisos do site saem do seu Gmail — sem domínio e sem serviço pago. O Google limita a quantidade de envios por dia, o que basta para um projeto de demonstração.
 
 **1. Senha de app do Google**
 Ative a verificação em duas etapas na sua Conta Google (Segurança) e crie uma **Senha de app** chamada "Supabase". Guarde as 16 letras.
 
-**2. "Esqueci minha senha" (e-mails do login)**
-Supabase → **Authentication → Emails → SMTP Settings** → ligue *Enable Custom SMTP*:
-- Sender email: seu Gmail · Sender name: `Alvar Imóveis`
-- Host: `smtp.gmail.com` · Port: `465`
-- Username: seu Gmail · Password: a senha de app
-
-**3. Avisos do site (mensagens, visitas, interessados, alertas)**
+**2. Avisos do site (mensagens, visitas, interessados, alertas)**
 1. **Edge Functions → Deploy a new function → Via editor**, nome `notificar`, cole `supabase/functions/notificar/index.ts` e publique. Nas configurações da função, **desligue "Verify JWT"**.
 2. **Edge Functions → Secrets**: crie `GMAIL_USER` (seu Gmail), `GMAIL_APP_PASSWORD` (a senha de app) e `WEBHOOK_SECRET` (um texto aleatório longo).
 3. Copie `supabase/notificacoes.sql`, troque `TROQUE-ESTE-SEGREDO` pelo mesmo `WEBHOOK_SECRET` e rode no SQL Editor. **Não** suba a versão com o segredo para o GitHub.
