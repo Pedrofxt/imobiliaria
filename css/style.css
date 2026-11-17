@@ -456,3 +456,10 @@ tr:last-child td { border-bottom: 0; }
 .legal table { margin: .8rem 0; font-size: .9rem; }
 .footer-bottom a:hover { color: var(--accent); }
 .legal-toc li { margin: 0 0 .4rem; break-inside: avoid; }
+
+/* ---------- segurança ---------- */
+.pw-meter { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: -.3rem; }
+.pw-meter span { display: block; height: 100%; width: 0; transition: width .4s var(--ease), background .3s; }
+.danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+details summary::-webkit-details-marker { display: none; }
+details summary { list-style: none; }

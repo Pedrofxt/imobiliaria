@@ -195,6 +195,14 @@ export async function signIn() {
   if (error) toast(error.message, 'err');
 }
 
+export async function signInWithPassword(email, password) {
+  if (DEMO) { await signIn(); return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
+}
+
+export const providers = () => auth.user?.app_metadata?.providers || (DEMO ? ['google'] : []);
+
 export async function signOut() {
   if (DEMO) { const d = db(); d.user = null; save(d); auth.user = null; auth.profile = null; favs.clear(); emit(); toast('Sessão encerrada.'); return; }
   await sb.auth.signOut();
@@ -339,6 +347,32 @@ export const api = {
     else must(await sb.from('profiles').update(patch).eq('id', id));
     if (id === auth.user.id) { await loadProfile(); emit(); }
   },
+  async changePassword(password) {
+    if (DEMO) return;
+    const { error } = await sb.auth.updateUser({ password });
+    if (error) {
+      if (/reauthentication|nonce/i.test(error.message)) throw new Error('Por segurança, saia e entre de novo antes de alterar a senha.');
+      if (/same/i.test(error.message)) throw new Error('A nova senha precisa ser diferente da atual.');
+      throw error;
+    }
+    const { data } = await sb.auth.getUser(); if (data?.user) auth.user = data.user;
+  },
+  async deleteAccount() {
+    if (DEMO) {
+      const d = db(); const id = auth.user.id;
+      d.profiles = d.profiles.filter((p) => p.id !== id);
+      d.favoritos = d.favoritos.filter((f) => f.user_id !== id);
+      d.imoveis.forEach((i) => { if (i.responsavel_id === id) i.responsavel_id = null; });
+      d.user = null; save(d);
+    } else {
+      const dir = `avatars/${auth.user.id}`;
+      const { data: files } = await sb.storage.from(STORAGE_BUCKET).list(dir);
+      if (files?.length) await sb.storage.from(STORAGE_BUCKET).remove(files.map((f) => `${dir}/${f.name}`));
+      must(await sb.rpc('delete_my_account'));
+      await sb.auth.signOut();
+    }
+    auth.user = null; auth.profile = null; favs.clear(); emit();
+  },
   async uploadAvatar(file) {
     if (DEMO) return compress(file, 300, .8, 'dataurl');
     const blob = await compress(file, 500, .85, 'blob');
@@ -466,7 +500,8 @@ function renderAuthSlot() {
         <a href="./conta.html#perfil">${icon('user')} Meu perfil</a>
         <a href="./conta.html#favoritos">${icon('heart')} Favoritos</a>
         ${isStaff() ? `<a href="./conta.html#imoveis">${icon('grid')} Meus imóveis</a><a href="./conta.html#novo">${icon('plus')} Cadastrar imóvel</a><a href="./conta.html#leads">${icon('inbox')} Interessados</a>` : ''}
-        ${isAdmin() ? `<a href="./conta.html#equipe">${icon('shield')} Gerenciar equipe</a>` : ''}
+        ${isAdmin() ? `<a href="./conta.html#equipe">${icon('users')} Gerenciar equipe</a>` : ''}
+        <a href="./conta.html#seguranca">${icon('shield')} Segurança</a>
         <button id="logout-btn">${icon('logout')} Sair</button>
       </div>
     </div>`;

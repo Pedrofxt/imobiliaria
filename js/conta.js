@@ -1,4 +1,4 @@
-import { $, $$, esc, api, auth, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML } from './core.js';
+import { $, $$, esc, api, auth, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML } from './core.js';
 
 renderChrome('anunciar');
 const root = $('#conta');
@@ -13,10 +13,24 @@ function renderLogin() {
       <h1>Sua conta Alvar</h1>
       <p class="muted">Entre para salvar favoritos, acompanhar seus interesses e — se você for da equipe — cadastrar imóveis.</p>
       ${googleBtn('Entrar com Google')}
+      <details style="margin-top:1.2rem;text-align:left">
+        <summary class="muted" style="cursor:pointer;font-size:.88rem;text-align:center">Já criei uma senha — entrar com e-mail</summary>
+        <form class="form" id="pw-login" style="margin-top:1rem">
+          <div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div>
+          <div class="field"><label>Senha</label><input type="password" name="senha" required autocomplete="current-password"></div>
+          <button class="btn" type="submit" style="margin-top:.2rem">Entrar</button>
+        </form>
+      </details>
       <p class="muted" style="font-size:.78rem;margin-top:1.2rem">${DEMO ? 'Modo demonstração: você entra como administrador fictício.' : 'Usamos apenas seu nome, e-mail e foto do Google.'}</p>
       <p class="muted" style="font-size:.75rem;margin-top:.4rem">Ao entrar, você concorda com os <a href="./termos.html" style="text-decoration:underline">Termos de Serviço</a> e a <a href="./privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p>
     </div>`;
   bindLoginButtons(root); observeReveal(root);
+  $('#pw-login').onsubmit = async (e) => {
+    e.preventDefault();
+    const b = e.target.querySelector('button'); b.disabled = true;
+    try { await signInWithPassword(e.target.email.value.trim(), e.target.senha.value); }
+    catch (err) { toast(err.message, 'err'); b.disabled = false; }
+  };
 }
 
 const TABS = [
@@ -26,6 +40,7 @@ const TABS = [
   { id: 'novo', label: 'Cadastrar imóvel', ic: 'plus', staff: true },
   { id: 'leads', label: 'Interessados', ic: 'inbox', staff: true },
   { id: 'equipe', label: 'Equipe', ic: 'users', admin: true },
+  { id: 'seguranca', label: 'Segurança', ic: 'shield' },
 ];
 
 function renderShell() {
@@ -54,7 +69,7 @@ function route() {
   if (!$('#tab-' + id)) id = 'perfil';
   $$('.side-nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === id));
   $$('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + id));
-  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito })[id]?.();
+  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca })[id]?.();
 }
 
 // ---------------------------------------------------------
@@ -364,6 +379,76 @@ async function tabEquipe() {
       b.disabled = false;
     });
   } catch (e) { $('#eq-box').innerHTML = dbErrorHTML(e); }
+}
+
+// ---------------------------------------------------------
+//  Segurança: senha e exclusão de conta
+// ---------------------------------------------------------
+function tabSeguranca() {
+  const t = $('#tab-seguranca');
+  const prov = providers();
+  const temGoogle = prov.includes('google');
+  const temSenha = prov.includes('email');
+  t.innerHTML = `
+    <div class="tab-head"><div><span class="eyebrow">Acesso e privacidade</span><h2>Segurança</h2></div></div>
+
+    <div class="panel form" style="margin-bottom:1.2rem">
+      <h3 style="font-size:1.35rem">Senha</h3>
+      ${temGoogle ? `<p class="muted" style="margin:0">Você entra com o <b>Google</b>, então a senha principal da sua conta é a do Google. Para trocá-la, use a página de segurança do Google.</p>
+      <div><a class="btn btn-ghost btn-sm" href="https://myaccount.google.com/signinoptions/password" target="_blank" rel="noopener">Alterar senha do Google ↗</a></div>
+      <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:.4rem 0">` : ''}
+      <div>
+        <h4 style="font-family:var(--ff-body);font-weight:700;font-size:1rem;margin-bottom:.3rem">${temSenha ? 'Alterar senha do site' : 'Criar senha do site (opcional)'}</h4>
+        <p class="muted" style="margin:0;font-size:.92rem">${temSenha ? 'Essa senha permite entrar com e-mail e senha, além do Google.' : 'Com uma senha você também pode entrar com seu e-mail, sem depender do Google.'}</p>
+      </div>
+      <form class="form" id="f-senha">
+        <div class="form-row">
+          <div class="field"><label>Nova senha</label><input type="password" name="s1" minlength="8" required autocomplete="new-password" placeholder="Mínimo de 8 caracteres"></div>
+          <div class="field"><label>Confirmar nova senha</label><input type="password" name="s2" minlength="8" required autocomplete="new-password"></div>
+        </div>
+        <div class="pw-meter" aria-hidden="true"><span></span></div>
+        <div><button class="btn" type="submit">${icon('check')} ${temSenha ? 'Alterar senha' : 'Criar senha'}</button></div>
+      </form>
+    </div>
+
+    <div class="panel form danger-zone">
+      <h3 style="font-size:1.35rem;color:var(--danger)">Excluir conta</h3>
+      <p class="muted" style="margin:0">Apaga definitivamente seu perfil, foto, favoritos e acesso. ${isStaff() ? 'Os imóveis sob sua responsabilidade continuam publicados, mas ficam <b>sem responsável</b> até um administrador definir outro.' : ''} Essa ação não pode ser desfeita.</p>
+      <div><button class="btn btn-danger" id="del-acc">${icon('trash')} Excluir minha conta</button></div>
+    </div>`;
+
+  const f = $('#f-senha');
+  const meter = $('.pw-meter span', t);
+  f.s1.oninput = () => {
+    const v = f.s1.value; let sc = 0;
+    if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[A-Z]/.test(v) && /[a-z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
+    meter.style.width = (sc / 5) * 100 + '%';
+    meter.style.background = sc <= 2 ? 'var(--danger)' : sc <= 3 ? 'var(--warn)' : 'var(--ok)';
+  };
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    if (f.s1.value.length < 8) return toast('A senha precisa ter pelo menos 8 caracteres.', 'err');
+    if (f.s1.value !== f.s2.value) return toast('As senhas não conferem.', 'err');
+    const b = f.querySelector('button'); b.disabled = true;
+    try { await api.changePassword(f.s1.value); toast(temSenha ? 'Senha alterada!' : 'Senha criada! Agora você também pode entrar com e-mail.'); f.reset(); meter.style.width = '0'; tabSeguranca(); }
+    catch (err) { toast(err.message, 'err'); b.disabled = false; }
+  };
+
+  $('#del-acc').onclick = () => {
+    const { el, close } = modal(`
+      <h3 style="font-size:1.6rem;margin-bottom:.6rem;color:var(--danger)">Excluir conta?</h3>
+      <p class="muted">Todos os seus dados serão apagados para sempre. Para confirmar, digite <b>EXCLUIR</b> abaixo.</p>
+      <div class="field" style="margin-top:1rem"><input id="del-confirm" autocomplete="off" placeholder="EXCLUIR"></div>
+      <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.2rem"><button class="btn btn-ghost" data-no>Cancelar</button><button class="btn btn-danger" data-yes disabled>Excluir definitivamente</button></div>`);
+    const inp = el.querySelector('#del-confirm'), yes = el.querySelector('[data-yes]');
+    inp.oninput = () => { yes.disabled = inp.value.trim().toUpperCase() !== 'EXCLUIR'; };
+    el.querySelector('[data-no]').onclick = close;
+    yes.onclick = async () => {
+      yes.disabled = true; yes.innerHTML = '<span class="spinner"></span> Excluindo…';
+      try { await api.deleteAccount(); close(); toast('Sua conta foi excluída.'); setTimeout(() => location.href = './index.html', 900); }
+      catch (err) { toast(err.message, 'err'); yes.disabled = false; yes.textContent = 'Excluir definitivamente'; }
+    };
+  };
 }
 
 // ---------------------------------------------------------
