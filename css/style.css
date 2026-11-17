@@ -523,3 +523,31 @@ details summary { list-style: none; }
   .brand .logo-mark { width: 28px; height: 28px; }
 }
 .footer-grid a.brand { display: flex; opacity: 1; font-size: 1.45rem; padding: 0; color: var(--text); }
+
+/* ---------- painel de mensagens (topo) ---------- */
+.msg-menu { position: relative; }
+.msg-panel { width: 360px; padding: 0; overflow: hidden; }
+.mp-head { display: flex; justify-content: space-between; align-items: center; padding: .9rem 1rem; border-bottom: 1px solid var(--line); }
+.mp-head strong { font-family: var(--ff-display); font-size: 1.25rem; font-weight: 400; }
+.mp-count { font-size: .75rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: .15rem .55rem; border-radius: 999px; }
+.mp-list { max-height: 380px; overflow-y: auto; padding: .35rem; }
+.dropdown .mp-item { display: flex; gap: .7rem; align-items: flex-start; padding: .7rem; border-radius: var(--radius-sm); position: relative; width: 100%; }
+.mp-item:hover { background: var(--bg-2); }
+.mp-item.unread { background: var(--accent-soft); }
+.mp-body { flex: 1; min-width: 0; display: grid; gap: .05rem; }
+.mp-top { display: flex; justify-content: space-between; gap: .5rem; }
+.mp-top strong { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-top small { font-size: .7rem; color: var(--muted); flex: none; }
+.mp-im { font-size: .72rem; font-weight: 600; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-last { font-size: .8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-item.unread .mp-last { color: var(--text); font-weight: 600; }
+.mp-dot { position: absolute; right: .7rem; bottom: .8rem; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: .68rem; font-weight: 800; display: grid; place-items: center; }
+.dropdown .mp-all { justify-content: center; border-top: 1px solid var(--line); border-radius: 0; padding: .85rem; font-weight: 600; font-size: .86rem; color: var(--accent); }
+.mp-empty { text-align: center; padding: 1.8rem 1.4rem 1.6rem; font-size: .9rem; }
+.mp-empty svg { width: 34px; height: 34px; color: var(--accent); margin: 0 auto .5rem; }
+.mp-empty p { margin: .2rem 0; }
+.mp-empty .muted { font-size: .84rem; margin-bottom: 1rem; }
+.mp-empty .btn { display: inline-flex; width: auto; color: var(--bg); padding: .5rem .9rem; margin-top: .4rem; }
+@media (max-width: 520px) {
+  .msg-panel { position: fixed; left: .75rem; right: .75rem; top: 70px; width: auto; }
+}

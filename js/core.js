@@ -490,7 +490,7 @@ export async function refreshUnread() {
 function watchUnread() {
   if (unreadSub) { unreadSub(); unreadSub = null; }
   if (!auth.user) return;
-  unreadSub = chat.subscribe((m) => { if (m.autor_id !== auth.user?.id) setTimeout(refreshUnread, 300); });
+  unreadSub = chat.subscribe((m) => { if (m.autor_id !== auth.user?.id) setTimeout(refreshUnread, 300); if ($('#msg-panel')?.classList.contains('open')) setTimeout(renderMsgPanel, 300); });
 }
 
 // Redimensiona a imagem no navegador antes de enviar
@@ -547,7 +547,10 @@ export function renderChrome(active = '') {
       </nav>
       <div class="nav-actions">
         <button class="btn-icon" id="theme-btn"></button>
-        <a class="btn-icon fav-btn hide" id="msg-btn" href="./conta.html#chat" aria-label="Mensagens">${icon('chat')}<span class="badge" id="msg-count">0</span></a>
+        <div class="msg-menu hide" id="msg-wrap">
+          <button class="btn-icon fav-btn" id="msg-btn" aria-label="Mensagens" aria-haspopup="true" aria-expanded="false">${icon('chat')}<span class="badge" id="msg-count">0</span></button>
+          <div class="dropdown msg-panel" id="msg-panel" role="dialog" aria-label="Mensagens"></div>
+        </div>
         <a class="btn-icon fav-btn" href="./conta.html#favoritos" aria-label="Favoritos">${icon('heart')}<span class="badge" id="fav-count">0</span></a>
         <div id="auth-slot"></div>
         <button class="btn-icon menu-toggle" id="menu-btn" aria-label="Menu">${icon('menu')}</button>
@@ -556,6 +559,7 @@ export function renderChrome(active = '') {
   syncThemeIcon();
   $('#theme-btn').onclick = toggleTheme;
   $('#menu-btn').onclick = () => $('#nav-links').classList.toggle('open');
+  initMsgPanel();
 
   let last = 0;
   const onScroll = () => {
@@ -600,7 +604,8 @@ let lastWatched;
 function renderAuthSlot() {
   const slot = $('#auth-slot'); if (!slot) return;
   updateFavBadge();
-  $('#msg-btn')?.classList.toggle('hide', !auth.user);
+  $('#msg-wrap')?.classList.toggle('hide', !auth.user);
+  if (!auth.user) closeMsgPanel();
   if ((auth.user?.id || null) !== lastWatched) { lastWatched = auth.user?.id || null; watchUnread(); }
   refreshUnread();
   if (!auth.user) {
@@ -623,9 +628,67 @@ function renderAuthSlot() {
       </div>
     </div>`;
   const dd = $('#user-dd');
-  $('#user-btn').onclick = (e) => { e.stopPropagation(); dd.classList.toggle('open'); };
+  $('#user-btn').onclick = (e) => { e.stopPropagation(); closeMsgPanel(); dd.classList.toggle('open'); };
   document.addEventListener('click', (e) => { if (!e.target.closest('.user-menu')) dd.classList.remove('open'); });
   $('#logout-btn').onclick = signOut;
+}
+
+
+// ---------------------------------------------------------
+//  Painel de mensagens no ícone do topo
+// ---------------------------------------------------------
+const quandoCurto = (d) => {
+  if (!d) return '';
+  const dt = new Date(d), hoje = new Date();
+  if (dt.toDateString() === hoje.toDateString()) return dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+  if (dt.toDateString() === ontem.toDateString()) return 'Ontem';
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+};
+function closeMsgPanel() {
+  $('#msg-panel')?.classList.remove('open');
+  $('#msg-btn')?.setAttribute('aria-expanded', 'false');
+}
+async function renderMsgPanel() {
+  const panel = $('#msg-panel'); if (!panel || !auth.user) return;
+  const me = auth.user.id;
+  if (!panel.dataset.loaded) panel.innerHTML = `<div class="mp-head"><strong>Mensagens</strong></div><div class="mp-list"><div class="skeleton" style="height:58px;margin:.4rem"></div><div class="skeleton" style="height:58px;margin:.4rem"></div></div>`;
+  let convs;
+  try { convs = await chat.list(); }
+  catch {
+    panel.innerHTML = `<div class="mp-head"><strong>Mensagens</strong></div><div class="mp-empty">${icon('chat')}<p>O chat ainda não está disponível.</p></div>`;
+    return;
+  }
+  panel.dataset.loaded = '1';
+  const total = convs.reduce((n, c) => n + (c.naoLidas || 0), 0);
+  const items = convs.slice(0, 6).map((c) => {
+    const o = (c.cliente_id === me ? c.corretor : c.cliente) || { nome: 'Usuário removido' };
+    return `<a class="mp-item ${c.naoLidas ? 'unread' : ''}" href="./conta.html?c=${encodeURIComponent(c.id)}#chat">
+      ${avatarHTML(o)}
+      <span class="mp-body"><span class="mp-top"><strong>${esc(o.nome || o.email || '—')}</strong><small>${quandoCurto(c.updated_at)}</small></span>
+      <span class="mp-im">${esc(c.imovel?.titulo || 'Imóvel removido')}</span>
+      <span class="mp-last">${esc(c.ultima_msg || 'Conversa iniciada')}</span></span>
+      ${c.naoLidas ? `<span class="mp-dot">${c.naoLidas}</span>` : ''}
+    </a>`;
+  }).join('');
+  panel.innerHTML = `
+    <div class="mp-head"><strong>Mensagens</strong>${total ? `<span class="mp-count">${total} não ${total === 1 ? 'lida' : 'lidas'}</span>` : ''}</div>
+    ${convs.length ? `<div class="mp-list">${items}</div><a class="mp-all" href="./conta.html#chat">Ver todas as conversas ${icon('arrow')}</a>`
+      : `<div class="mp-empty">${icon('chat')}<p><b>Nenhuma mensagem ainda</b></p><p class="muted">Abra um imóvel e toque em <b>Conversar</b> para falar com o corretor.</p><a class="btn btn-sm" href="./index.html#catalogo">Ver imóveis</a></div>`}`;
+}
+function initMsgPanel() {
+  const btn = $('#msg-btn'), panel = $('#msg-panel'); if (!btn) return;
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const open = !panel.classList.contains('open');
+    $('#user-dd')?.classList.remove('open');
+    panel.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) renderMsgPanel();
+  };
+  panel.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', closeMsgPanel);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMsgPanel(); });
 }
 
 export function observeReveal(root = document) {
