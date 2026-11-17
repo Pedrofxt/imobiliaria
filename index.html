@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alvar Imóveis — Endereços que contam histórias</title>
+  <meta name="description" content="Casas, apartamentos e terrenos para comprar ou alugar no litoral do Paraná. Alvar Imóveis (marca fictícia).">
+  <meta name="theme-color" content="#B8552F">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <script>(function(){var t=localStorage.getItem('alvar_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="page-loader"><svg class="logo-mark" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 20 6l15 13"/><path d="M12.5 35V25a7.5 7.5 0 0 1 15 0v10"/></svg></div>
+  <header id="site-header"></header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-media"><img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2200&q=80" alt="" id="hero-img" fetchpriority="high"></div>
+      <div class="container hero-content">
+        <span class="eyebrow" style="color:#F2A27F">Alvar Imóveis · Litoral do Paraná</span>
+        <h1 id="hero-title">Encontre o lugar onde a sua <em>história</em> mora.</h1>
+        <p class="lead">Casas, apartamentos e terrenos escolhidos a dedo. Navegue, salve seus favoritos e fale direto com o corretor responsável.</p>
+        <form class="search-box" id="hero-search">
+          <div class="seg" id="hero-seg">
+            <span class="seg-thumb"></span>
+            <button type="button" class="on" data-v="venda">Comprar</button>
+            <button type="button" data-v="aluguel">Alugar</button>
+          </div>
+          <label class="field-inline">
+            <svg class="i" viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <select id="hero-tipo" aria-label="Tipo">
+              <option value="">Todos os tipos</option>
+              <option value="casa">Casa</option><option value="apartamento">Apartamento</option><option value="cobertura">Cobertura</option><option value="terreno">Terreno</option><option value="comercial">Comercial</option>
+            </select>
+          </label>
+          <label class="field-inline">
+            <svg class="i" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <input id="hero-q" placeholder="Cidade, bairro ou palavra-chave" aria-label="Busca">
+          </label>
+          <button class="btn btn-accent" type="submit"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar</button>
+        </form>
+      </div>
+      <div class="hero-scroll">Role para explorar</div>
+    </section>
+
+    <div class="container stats">
+      <div class="stat reveal"><b data-count="0" id="st-total">0</b><span>imóveis no catálogo</span></div>
+      <div class="stat reveal" style="--d:.08s"><b data-count="0" id="st-venda">0</b><span>à venda</span></div>
+      <div class="stat reveal" style="--d:.16s"><b data-count="0" id="st-aluguel">0</b><span>para alugar</span></div>
+      <div class="stat reveal" style="--d:.24s"><b data-count="0" id="st-equipe">0</b><span>especialistas na equipe</span></div>
+    </div>
+
+    <div class="marquee" aria-hidden="true"><div class="marquee-track" id="marquee"></div></div>
+
+    <section class="section" id="destaques">
+      <div class="container">
+        <div class="section-head reveal">
+          <div><span class="eyebrow">Seleção da curadoria</span><h2>Destaques da semana</h2></div>
+          <div class="carousel-nav">
+            <button class="btn-icon" id="feat-prev" aria-label="Anterior"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button class="btn-icon" id="feat-next" aria-label="Próximo"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </div>
+        <div class="featured" id="featured">
+          <div class="feat skeleton"></div><div class="feat skeleton"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="catalogo" style="padding-top:0">
+      <div class="container">
+        <div class="section-head reveal">
+          <div><span class="eyebrow">Catálogo</span><h2>Todos os imóveis</h2></div>
+          <p>Filtre por finalidade, tipo, quartos e faixa de preço. Toque no coração para salvar.</p>
+        </div>
+
+        <div class="filters" id="filters">
+          <div class="chip-group" id="f-fin">
+            <button class="chip on" data-v="">Todos</button>
+            <button class="chip" data-v="venda">Comprar</button>
+            <button class="chip" data-v="aluguel">Alugar</button>
+          </div>
+          <label class="field-inline">
+            <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="f-q" placeholder="Buscar…" aria-label="Buscar">
+          </label>
+          <select class="select" id="f-tipo" aria-label="Tipo">
+            <option value="">Tipo</option><option value="casa">Casa</option><option value="apartamento">Apartamento</option><option value="cobertura">Cobertura</option><option value="terreno">Terreno</option><option value="comercial">Comercial</option>
+          </select>
+          <select class="select" id="f-quartos" aria-label="Quartos">
+            <option value="0">Quartos</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option>
+          </select>
+          <select class="select" id="f-preco" aria-label="Preço máximo">
+            <option value="">Preço máx.</option>
+            <option value="3000">até R$ 3 mil</option><option value="5000">até R$ 5 mil</option>
+            <option value="500000">até R$ 500 mil</option><option value="1000000">até R$ 1 mi</option><option value="2000000">até R$ 2 mi</option>
+          </select>
+          <select class="select" id="f-ord" aria-label="Ordenar">
+            <option value="recentes">Mais recentes</option><option value="menor">Menor preço</option><option value="maior">Maior preço</option><option value="area">Maior área</option>
+          </select>
+        </div>
+
+        <div class="results-info"><span id="res-count">Carregando…</span><button class="btn btn-ghost btn-sm hide" id="f-clear">Limpar filtros</button></div>
+        <div class="grid" id="grid">
+          <div class="skeleton" style="height:400px"></div><div class="skeleton" style="height:400px"></div><div class="skeleton" style="height:400px"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="container">
+        <div class="section-head reveal"><div><span class="eyebrow">Como funciona</span><h2>Simples como deveria ser</h2></div></div>
+        <div class="steps">
+          <div class="step reveal"><div class="n">01</div><h3>Explore</h3><p>Filtre o catálogo, veja fotos em tela cheia e todos os dados de cada imóvel.</p></div>
+          <div class="step reveal" style="--d:.1s"><div class="n">02</div><h3>Salve</h3><p>Entre com o Google e monte sua lista de favoritos, como num carrinho.</p></div>
+          <div class="step reveal" style="--d:.2s"><div class="n">03</div><h3>Converse</h3><p>Envie seu interesse e fale direto com o corretor responsável pelo imóvel.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal">
+      <div class="cta">
+        <div class="blob"></div>
+        <span class="eyebrow" style="color:#F2A27F">Para proprietários e corretores</span>
+        <h2 style="margin:.8rem 0 1rem">Anuncie com quem cuida de cada detalhe.</h2>
+        <p>Cadastre o imóvel com fotos, descrição e responsável. Nossa equipe assume daí.</p>
+        <a class="btn btn-accent" href="./conta.html#novo" style="margin-top:1rem">Anunciar imóvel <svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer"></footer>
+  <script type="module" src="js/home.js"></script>
+</body>
+</html>
