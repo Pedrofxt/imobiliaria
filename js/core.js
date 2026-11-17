@@ -124,7 +124,7 @@ export function confirmBox(texto, okLabel = 'Confirmar') {
 }
 
 export function askLogin(motivo = 'Entre para continuar') {
-  modal(`<div style="text-align:center;padding:.5rem 0">${LOGO.replace('class="logo-mark"', 'class="logo-mark" style="width:52px;height:52px;color:var(--accent);margin:0 auto 1rem"')}<h3 style="font-size:1.7rem">${esc(motivo)}</h3><p class="muted">Use sua conta Google — leva dois segundos.</p>${googleBtn('Continuar com Google', 'width:100%;margin-top:1rem')}</div>`);
+  modal(`<div style="text-align:center;padding:.5rem 0">${LOGO.replace('class="logo-mark"', 'class="logo-mark" style="width:52px;height:52px;color:var(--accent);margin:0 auto 1rem"')}<h3 style="font-size:1.7rem">${esc(motivo)}</h3><p class="muted">Use sua conta Google — leva dois segundos.</p>${googleBtn('Continuar com Google', 'width:100%;margin-top:1rem')}<p class="muted" style="font-size:.75rem;margin-top:1rem">Ao continuar, você concorda com os <a href="./termos.html" style="text-decoration:underline">Termos</a> e a <a href="./privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p></div>`);
 }
 
 // ---------------------------------------------------------
@@ -431,11 +431,11 @@ export function renderChrome(active = '') {
             <p class="muted" style="max-width:34ch;margin-top:1rem">${esc(SITE.slogan)} Imobiliária fictícia criada para demonstração.</p>
           </div>
           <div><h4>Explorar</h4><a href="./index.html?f=venda#catalogo">Comprar</a><a href="./index.html?f=aluguel#catalogo">Alugar</a><a href="./index.html#destaques">Destaques</a></div>
-          <div><h4>Alvar</h4><a href="./equipe.html">Equipe</a><a href="./conta.html#novo">Anunciar imóvel</a><a href="./conta.html">Minha conta</a></div>
+          <div><h4>Alvar</h4><a href="./equipe.html">Equipe</a><a href="./conta.html#novo">Anunciar imóvel</a><a href="./conta.html">Minha conta</a><a href="./privacidade.html">Privacidade</a><a href="./termos.html">Termos</a></div>
           <div><h4>Contato</h4><a href="mailto:${SITE.email}">${SITE.email}</a><a href="https://wa.me/${SITE.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><span class="muted" style="font-size:.88rem;display:block;margin-top:.3rem">${esc(SITE.endereco)}</span></div>
         </div>
         <div class="footer-big" aria-hidden="true">alvar.</div>
-        <div class="footer-bottom"><span>© ${new Date().getFullYear()} Alvar Imóveis — marca fictícia.</span><span>CRECI-J 0000 (fictício)</span></div>
+        <div class="footer-bottom"><span>© ${new Date().getFullYear()} Alvar Imóveis — marca fictícia.</span><span style="display:flex;gap:1.2rem;flex-wrap:wrap"><a href="./privacidade.html">Política de Privacidade</a><a href="./termos.html">Termos de Serviço</a><span>CRECI-J 0000 (fictício)</span></span></div>
       </div>`;
   }
 

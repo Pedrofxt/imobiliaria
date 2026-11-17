@@ -14,6 +14,7 @@ function renderLogin() {
       <p class="muted">Entre para salvar favoritos, acompanhar seus interesses e — se você for da equipe — cadastrar imóveis.</p>
       ${googleBtn('Entrar com Google')}
       <p class="muted" style="font-size:.78rem;margin-top:1.2rem">${DEMO ? 'Modo demonstração: você entra como administrador fictício.' : 'Usamos apenas seu nome, e-mail e foto do Google.'}</p>
+      <p class="muted" style="font-size:.75rem;margin-top:.4rem">Ao entrar, você concorda com os <a href="./termos.html" style="text-decoration:underline">Termos de Serviço</a> e a <a href="./privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p>
     </div>`;
   bindLoginButtons(root); observeReveal(root);
 }
