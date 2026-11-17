@@ -1,24 +1,35 @@
 // =========================================================
 //  ALVAR IMÓVEIS — Edge Function "notificar"
-//  Envia e-mails (via Resend) quando acontece algo no banco:
+//  Envia e-mails (pelo Gmail ou pela Resend) quando acontece algo no banco:
 //   • nova mensagem no chat        → para o outro participante
 //   • novo interessado             → para o corretor responsável
 //   • visita pedida / respondida   → corretor / interessado
 //   • anúncio aguardando aprovação → administradores
 //   • anúncio publicado            → dono do anúncio + buscas salvas que combinam
 //
-//  Segredos necessários (Edge Functions → Secrets):
-//   RESEND_API_KEY   chave da Resend (resend.com)
-//   WEBHOOK_SECRET   o mesmo valor usado em supabase/notificacoes.sql
-//   EMAIL_FROM       opcional — ex.: "Alvar Imóveis <avisos@seudominio.com>"
-//   SITE_URL         opcional — padrão https://pedrofxt.github.io/imobiliaria
+//  Segredos (Edge Functions → Secrets):
+//   WEBHOOK_SECRET      o mesmo valor usado em supabase/notificacoes.sql
+//   — Opção 1, Gmail (sem domínio):
+//   GMAIL_USER          seu endereço Gmail
+//   GMAIL_APP_PASSWORD  senha de app de 16 letras (Conta Google → Segurança → Senhas de app)
+//   — Opção 2, Resend (exige domínio verificado para enviar a qualquer pessoa):
+//   RESEND_API_KEY      chave da Resend
+//   EMAIL_FROM          opcional — ex.: "Alvar Imóveis <avisos@seudominio.com>"
+//   SITE_URL            opcional — padrão https://pedrofxt.github.io/imobiliaria
 //  (SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY já existem automaticamente.)
 // =========================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6";
 
 const SITE = (Deno.env.get("SITE_URL") || "https://pedrofxt.github.io/imobiliaria").replace(/\/$/, "");
 const FROM = Deno.env.get("EMAIL_FROM") || "Alvar Imóveis <onboarding@resend.dev>";
 const RESEND = Deno.env.get("RESEND_API_KEY") || "";
+const GMAIL_USER = Deno.env.get("GMAIL_USER") || "";
+const GMAIL_PASS = (Deno.env.get("GMAIL_APP_PASSWORD") || "").replace(/\s/g, "");
+// Gmail pela porta 465 (as Edge Functions bloqueiam as portas 25 e 587)
+const gmail = GMAIL_USER && GMAIL_PASS
+  ? nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: GMAIL_USER, pass: GMAIL_PASS } })
+  : null;
 const SECRET = Deno.env.get("WEBHOOK_SECRET") || "";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -54,8 +65,17 @@ function layout(titulo: string, corpo: string, botao?: { texto: string; url: str
 }
 
 async function enviar(para: string | string[], assunto: string, html: string) {
-  const to = (Array.isArray(para) ? para : [para]).filter(Boolean);
-  if (!to.length || !RESEND) return;
+  const to = [...new Set((Array.isArray(para) ? para : [para]).filter(Boolean))];
+  if (!to.length) return;
+  if (gmail) {
+    // um envio por destinatário, para ninguém ver o e-mail dos outros
+    for (const dest of to) {
+      try { await gmail.sendMail({ from: `"Alvar Imóveis" <${GMAIL_USER}>`, to: dest, subject: assunto, html }); }
+      catch (e) { console.error("Gmail:", e); }
+    }
+    return;
+  }
+  if (!RESEND) { console.warn("Nenhum provedor de e-mail configurado"); return; }
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${RESEND}`, "Content-Type": "application/json" },

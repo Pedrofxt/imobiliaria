@@ -16,7 +16,7 @@ Site de imobiliária **fictícia** no estilo e-commerce: catálogo com filtros, 
 - "Tenho interesse" vira conversa no chat automaticamente; proteção anti-robô e anti-spam
 - Conta: perfil, mensagens em tempo real, visitas, favoritos, buscas salvas, segurança (senha do site, recuperação, exclusão de conta)
 - Equipe: **painel com números**, imóveis com **rascunho → aprovação**, interessados com **etapas** (novo → fechado), gestão de usuários
-- Avisos por e-mail (Edge Function + Resend)
+- Avisos por e-mail (Edge Function, enviando pelo Gmail)
 
 ## Estrutura
 
@@ -54,16 +54,25 @@ supabase/functions/notificar   Edge Function que envia os e-mails
 
 Se você já rodou uma versão antiga do `schema.sql`, rode na ordem: `chat.sql`, `excluir-conta.sql`, `melhorias.sql`. Todos podem ser executados mais de uma vez.
 
-## Avisos por e-mail (opcional)
+## E-mails pelo Gmail (sem domínio)
 
-1. Crie uma conta na [Resend](https://resend.com) e gere uma **API Key**. Sem domínio verificado, ela só entrega para o seu próprio e-mail — para enviar a qualquer pessoa, verifique um domínio e use-o em `EMAIL_FROM`.
-2. No Supabase: **Edge Functions → Deploy a new function → Via editor**, nome `notificar`, cole `supabase/functions/notificar/index.ts` e publique. Nas configurações da função, **desligue "Verify JWT"** (a função usa um segredo próprio).
-3. Em **Edge Functions → Secrets**, crie `RESEND_API_KEY` e `WEBHOOK_SECRET` (um texto aleatório longo). Opcionais: `EMAIL_FROM`, `SITE_URL`.
-4. Copie `supabase/notificacoes.sql`, troque `TROQUE-ESTE-SEGREDO` pelo mesmo `WEBHOOK_SECRET` e rode no SQL Editor. **Não** suba a versão com o segredo para o GitHub.
+Tudo funciona com o seu Gmail como remetente — sem domínio e sem serviço pago. O Google limita a quantidade de envios por dia, o que basta para um projeto de demonstração.
 
-## E-mails de recuperação de senha
+**1. Senha de app do Google**
+Ative a verificação em duas etapas na sua Conta Google (Segurança) e crie uma **Senha de app** chamada "Supabase". Guarde as 16 letras.
 
-O servidor de e-mail padrão do Supabase só envia para membros da equipe do projeto e tem limite baixo. Para o "Esqueci minha senha" funcionar com qualquer usuário, configure **Authentication → Emails → SMTP Settings** com a Resend: host `smtp.resend.com`, porta `465`, usuário `resend`, senha = sua API Key.
+**2. "Esqueci minha senha" (e-mails do login)**
+Supabase → **Authentication → Emails → SMTP Settings** → ligue *Enable Custom SMTP*:
+- Sender email: seu Gmail · Sender name: `Alvar Imóveis`
+- Host: `smtp.gmail.com` · Port: `465`
+- Username: seu Gmail · Password: a senha de app
+
+**3. Avisos do site (mensagens, visitas, interessados, alertas)**
+1. **Edge Functions → Deploy a new function → Via editor**, nome `notificar`, cole `supabase/functions/notificar/index.ts` e publique. Nas configurações da função, **desligue "Verify JWT"**.
+2. **Edge Functions → Secrets**: crie `GMAIL_USER` (seu Gmail), `GMAIL_APP_PASSWORD` (a senha de app) e `WEBHOOK_SECRET` (um texto aleatório longo).
+3. Copie `supabase/notificacoes.sql`, troque `TROQUE-ESTE-SEGREDO` pelo mesmo `WEBHOOK_SECRET` e rode no SQL Editor. **Não** suba a versão com o segredo para o GitHub.
+
+*Alternativa:* com um domínio próprio, dá para usar a Resend no lugar do Gmail — basta criar o segredo `RESEND_API_KEY` (e `EMAIL_FROM`) em vez dos dois do Gmail.
 
 ## Papéis
 
