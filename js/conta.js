@@ -1,4 +1,4 @@
-import { $, $$, esc, api, auth, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML } from './core.js';
+import { $, $$, esc, api, auth, chat, refreshUnread, signInWithPassword, providers, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, confirmBox, modal, googleBtn, bindLoginButtons, LOGO, cover, loc, fmtDate, isStaff, isAdmin, TIPOS, FINALIDADES, STATUS, PAPEIS, COMODIDADES, DEMO, dbErrorHTML } from './core.js';
 
 renderChrome('anunciar');
 const root = $('#conta');
@@ -35,6 +35,7 @@ function renderLogin() {
 
 const TABS = [
   { id: 'perfil', label: 'Perfil', ic: 'user' },
+  { id: 'chat', label: 'Mensagens', ic: 'chat' },
   { id: 'favoritos', label: 'Favoritos', ic: 'heart', count: () => favs.size },
   { id: 'imoveis', label: 'Meus imóveis', ic: 'grid', staff: true },
   { id: 'novo', label: 'Cadastrar imóvel', ic: 'plus', staff: true },
@@ -69,7 +70,8 @@ function route() {
   if (!$('#tab-' + id)) id = 'perfil';
   $$('.side-nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === id));
   $$('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + id));
-  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca })[id]?.();
+  ({ perfil: tabPerfil, favoritos: tabFavoritos, imoveis: tabImoveis, novo: tabNovo, leads: tabLeads, equipe: tabEquipe, restrito: tabRestrito, seguranca: tabSeguranca, chat: tabChat })[id]?.();
+  if (id !== 'chat' && stopChat) { stopChat(); stopChat = null; }
 }
 
 // ---------------------------------------------------------
@@ -379,6 +381,136 @@ async function tabEquipe() {
       b.disabled = false;
     });
   } catch (e) { $('#eq-box').innerHTML = dbErrorHTML(e); }
+}
+
+
+// ---------------------------------------------------------
+//  Mensagens (chat em tempo real)
+// ---------------------------------------------------------
+let stopChat = null;
+const hora = (d) => new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const quando = (d) => {
+  const dt = new Date(d), hoje = new Date();
+  if (dt.toDateString() === hoje.toDateString()) return hora(d);
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+  if (dt.toDateString() === ontem.toDateString()) return 'Ontem';
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+};
+const diaLabel = (d) => {
+  const dt = new Date(d), hoje = new Date();
+  if (dt.toDateString() === hoje.toDateString()) return 'Hoje';
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+  if (dt.toDateString() === ontem.toDateString()) return 'Ontem';
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+};
+
+async function tabChat() {
+  const t = $('#tab-chat');
+  if (stopChat) { stopChat(); stopChat = null; }
+  t.innerHTML = `<div class="tab-head"><div><span class="eyebrow">Conversas com a equipe</span><h2>Mensagens</h2></div></div>
+    <div class="chat panel" id="chat"><aside class="chat-list" id="chat-list"><div class="skeleton" style="height:76px;margin:.6rem"></div></aside><section class="chat-win" id="chat-win"></section></div>`;
+  const me = auth.user.id;
+  let convs = [], atual = null, msgs = [];
+
+  try { convs = await chat.list(); }
+  catch (e) { $('#chat').outerHTML = dbErrorHTML(e); return; }
+
+  const outro = (c) => (c.cliente_id === me ? c.corretor : c.cliente) || { nome: 'Usuário removido' };
+
+  const drawList = () => {
+    const l = $('#chat-list');
+    if (!convs.length) {
+      l.innerHTML = `<div class="chat-empty-list"><p class="muted">Nenhuma conversa ainda.</p><p class="muted" style="font-size:.85rem">Abra um imóvel e toque em <b>Conversar com o corretor</b>.</p><a class="btn btn-sm" href="./index.html#catalogo">Ver imóveis</a></div>`;
+      return;
+    }
+    l.innerHTML = convs.map((c) => {
+      const o = outro(c);
+      return `<button class="chat-item ${atual?.id === c.id ? 'on' : ''}" data-c="${esc(c.id)}">
+        ${avatarHTML(o)}
+        <span class="ci-body"><span class="ci-top"><strong>${esc(o.nome || o.email || '—')}</strong><small>${c.updated_at ? quando(c.updated_at) : ''}</small></span>
+        <span class="ci-im">${esc(c.imovel?.titulo || 'Imóvel removido')}</span>
+        <span class="ci-last">${esc(c.ultima_msg || 'Comece a conversa…')}</span></span>
+        ${c.naoLidas ? `<span class="ci-badge">${c.naoLidas}</span>` : ''}
+      </button>`;
+    }).join('');
+    $$('[data-c]', l).forEach((b) => b.onclick = () => abrir(b.dataset.c));
+  };
+
+  const bubble = (m, prev) => {
+    const mine = m.autor_id === me;
+    const novoDia = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
+    const agrupa = prev && !novoDia && prev.autor_id === m.autor_id && (new Date(m.created_at) - new Date(prev.created_at)) < 120000;
+    return `${novoDia ? `<div class="day-sep"><span>${diaLabel(m.created_at)}</span></div>` : ''}
+      <div class="msg ${mine ? 'me' : ''} ${agrupa ? 'grouped' : ''}" data-m="${esc(m.id)}"><div class="bubble">${esc(m.texto)}<span class="t">${hora(m.created_at)}${mine ? ` ${m.lida ? '✓✓' : '✓'}` : ''}</span></div></div>`;
+  };
+
+  const drawMsgs = () => {
+    const box = $('#msgs'); if (!box) return;
+    box.innerHTML = msgs.length ? msgs.map((m, i) => bubble(m, msgs[i - 1])).join('') : `<div class="chat-hint">Envie a primeira mensagem para ${esc(outro(atual).nome?.split(' ')[0] || 'o corretor')}. Pergunte sobre visitas, documentação ou condições.</div>`;
+    box.scrollTop = box.scrollHeight;
+  };
+
+  async function abrir(id) {
+    atual = convs.find((c) => c.id === id); if (!atual) return;
+    history.replaceState(null, '', `${location.pathname}?c=${encodeURIComponent(id)}#chat`);
+    $('#chat').classList.add('open');
+    drawList();
+    const o = outro(atual), im = atual.imovel;
+    $('#chat-win').innerHTML = `
+      <header class="chat-head">
+        <button class="btn-icon chat-back" aria-label="Voltar">${icon('left')}</button>
+        ${avatarHTML(o)}
+        <div style="min-width:0;flex:1"><strong>${esc(o.nome || o.email)}</strong><span class="muted">${atual.cliente_id === me ? esc(o.cargo || 'Corretor responsável') : 'Interessado'}</span></div>
+        ${im ? `<a class="chat-im" href="./imovel.html?id=${encodeURIComponent(im.id)}"><img src="${esc(cover(im))}" alt="" data-fb><span><b>${esc(im.titulo)}</b><small>${priceLabel(im)}</small></span></a>` : ''}
+      </header>
+      <div class="msgs" id="msgs"><div class="skeleton" style="height:60px;width:60%;margin:1rem"></div></div>
+      <form class="chat-form" id="chat-form">
+        <textarea id="chat-input" rows="1" placeholder="Escreva uma mensagem…" maxlength="2000" aria-label="Mensagem"></textarea>
+        <button class="btn btn-accent" type="submit" aria-label="Enviar">${icon('arrow')}</button>
+      </form>`;
+    imgFallback($('#chat-win'));
+    $('.chat-back').onclick = () => { $('#chat').classList.remove('open'); history.replaceState(null, '', location.pathname + '#chat'); };
+    const inp = $('#chat-input'), form = $('#chat-form');
+    const grow = () => { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 140) + 'px'; };
+    inp.oninput = grow;
+    inp.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } };
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const txt = inp.value; if (!txt.trim()) return;
+      inp.value = ''; grow(); inp.focus({ preventScroll: true });
+      try {
+        const m = await chat.send(atual.id, txt);
+        if (m && !msgs.some((x) => x.id === m.id)) { msgs.push(m); drawMsgs(); }
+        atual.ultima_msg = m?.texto; atual.updated_at = m?.created_at;
+        convs.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '')); drawList();
+      } catch (err) { toast(err.message, 'err'); inp.value = txt; }
+    };
+    msgs = await chat.messages(id);
+    drawMsgs();
+    if (atual.naoLidas) { atual.naoLidas = 0; drawList(); }
+    chat.markRead(id);
+    if (matchMedia('(min-width: 900px)').matches) inp.focus({ preventScroll: true });
+    $('#chat').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  const empty = () => { $('#chat-win').innerHTML = `<div class="chat-placeholder">${icon('chat')}<h3>Suas conversas</h3><p class="muted">Escolha uma conversa ao lado para ver as mensagens.</p></div>`; };
+
+  // tempo real
+  stopChat = chat.subscribe(async (m) => {
+    let c = convs.find((x) => x.id === m.conversa_id);
+    if (!c) { try { convs = await chat.list(); } catch {} drawList(); return; }
+    c.ultima_msg = m.texto; c.updated_at = m.created_at;
+    if (atual?.id === m.conversa_id) {
+      if (!msgs.some((x) => x.id === m.id)) { msgs.push(m); drawMsgs(); }
+      if (m.autor_id !== me) chat.markRead(m.conversa_id);
+    } else if (m.autor_id !== me) c.naoLidas = (c.naoLidas || 0) + 1;
+    convs.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+    drawList();
+  });
+
+  drawList();
+  const alvo = qs('c');
+  if (alvo && convs.some((c) => c.id === alvo)) abrir(alvo); else empty();
 }
 
 // ---------------------------------------------------------

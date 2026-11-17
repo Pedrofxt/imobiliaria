@@ -1,4 +1,4 @@
-import { $, $$, esc, api, auth, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, num, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, TIPOS, FINALIDADES, STATUS, PLACEHOLDER, SITE, isAdmin, dbErrorHTML } from './core.js';
+import { $, $$, esc, api, auth, chat, initAuth, onAuth, renderChrome, observeReveal, cardGlow, cardHTML, bindFavs, favs, finishLoading, icon, money, num, priceLabel, imgFallback, qs, onlyDigits, avatarHTML, toast, TIPOS, FINALIDADES, STATUS, PLACEHOLDER, SITE, isAdmin, dbErrorHTML } from './core.js';
 
 renderChrome('imoveis');
 const root = $('#prop');
@@ -101,8 +101,9 @@ function render(im) {
         ${r ? `<div class="panel reveal" style="--d:.1s">
           <span class="eyebrow">Responsável pelo imóvel</span>
           <div class="agent" style="margin-top:1rem">${avatarHTML(r, 'lg')}<div><strong>${esc(r.nome)}</strong><span>${esc(r.cargo || 'Corretor')}</span><br><span>${esc(r.creci || '')}</span></div></div>
+          ${auth.user?.id !== r.id ? `<button class="btn btn-accent" id="open-chat" style="width:100%;margin-top:1.1rem">${icon('chat')} Conversar com ${esc(r.nome.split(' ')[0])}</button>` : ''}
           <div class="agent-links">
-            <a class="btn btn-sm" href="${wa}" target="_blank" rel="noopener">${icon('chat')} WhatsApp</a>
+            <a class="btn btn-sm" href="${wa}" target="_blank" rel="noopener">${icon('phone')} WhatsApp</a>
             ${r.email ? `<a class="btn btn-ghost btn-sm" href="mailto:${esc(r.email)}">${icon('mail')} E-mail</a>` : ''}
           </div>
         </div>` : ''}
@@ -132,6 +133,14 @@ function render(im) {
       btn.innerHTML = `${icon('check')} Interesse enviado`;
       toast(`Recebemos seu contato! ${r ? r.nome.split(' ')[0] + ' vai falar com você.' : ''}`);
     } catch (err) { toast(err.message || 'Erro ao enviar', 'err'); btn.disabled = false; btn.textContent = 'Tenho interesse'; }
+  };
+
+  const oc = $('#open-chat');
+  if (oc) oc.onclick = async () => {
+    oc.disabled = true;
+    try { const id = await chat.open(im.id); if (id) location.href = `./conta.html?c=${encodeURIComponent(id)}#chat`; }
+    catch (err) { toast(err.message, 'err'); }
+    oc.disabled = false;
   };
 
   lightbox(fotos);

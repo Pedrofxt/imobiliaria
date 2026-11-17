@@ -135,6 +135,7 @@ function db() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS)); } catch {}
   if (!d) { d = { profiles: structuredClone(DEMO_PROFILES), imoveis: structuredClone(DEMO_IMOVEIS), favoritos: [], leads: [], user: null }; save(d); }
+  d.conversas ||= []; d.mensagens ||= [];
   return d;
 }
 function save(d) {
@@ -382,6 +383,116 @@ export const api = {
   },
 };
 
+
+// ---------------------------------------------------------
+//  Chat (conversas entre interessado e corretor)
+// ---------------------------------------------------------
+const demoBus = new Set();
+const CONV_SEL = '*, imovel:imoveis(id,titulo,cidade,bairro,preco,finalidade,imovel_fotos(url,ordem)), cliente:profiles!conversas_cliente_fk(id,nome,email,avatar_url), corretor:profiles!conversas_corretor_fk(id,nome,email,avatar_url,cargo,creci)';
+
+export const chat = {
+  async list() {
+    const me = auth.user.id;
+    if (DEMO) {
+      const d = db();
+      return d.conversas.filter((c) => c.cliente_id === me || c.corretor_id === me).map((c) => {
+        const im = d.imoveis.find((i) => i.id === c.imovel_id);
+        return { ...c, imovel: im ? hydrate(im, d) : null, cliente: d.profiles.find((p) => p.id === c.cliente_id), corretor: d.profiles.find((p) => p.id === c.corretor_id),
+          naoLidas: d.mensagens.filter((m) => m.conversa_id === c.id && !m.lida && m.autor_id !== me).length };
+      }).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    }
+    const convs = must(await sb.from('conversas').select(CONV_SEL).order('updated_at', { ascending: false }));
+    const unread = must(await sb.from('mensagens').select('conversa_id').eq('lida', false).neq('autor_id', me));
+    return convs.map((c) => { if (c.imovel) sortFotos(c.imovel); return { ...c, naoLidas: unread.filter((u) => u.conversa_id === c.id).length }; });
+  },
+  async open(imovelId) {
+    if (!auth.user) { askLogin('Entre para conversar com o corretor'); return null; }
+    const me = auth.user.id;
+    if (DEMO) {
+      const d = db();
+      let c = d.conversas.find((x) => x.imovel_id === imovelId && x.cliente_id === me);
+      if (!c) {
+        const im = d.imoveis.find((i) => i.id === imovelId);
+        const corretor = im.responsavel_id || d.profiles.find((p) => p.papel === 'admin' && p.id !== me)?.id;
+        if (corretor === me) throw new Error('Você é o responsável por este imóvel.');
+        c = { id: 'c-' + uid().slice(0, 8), imovel_id: imovelId, cliente_id: me, corretor_id: corretor, ultima_msg: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        d.conversas.unshift(c); save(d);
+      }
+      return c.id;
+    }
+    const found = must(await sb.from('conversas').select('id').eq('imovel_id', imovelId).eq('cliente_id', me).maybeSingle());
+    if (found) return found.id;
+    const { data, error } = await sb.from('conversas').insert({ imovel_id: imovelId, cliente_id: me }).select('id').single();
+    if (error) throw new Error(/responsável/.test(error.message) ? 'Você é o responsável por este imóvel.' : error.message);
+    return data.id;
+  },
+  async messages(conversaId) {
+    if (DEMO) return db().mensagens.filter((m) => m.conversa_id === conversaId).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return must(await sb.from('mensagens').select('*').eq('conversa_id', conversaId).order('created_at').limit(500));
+  },
+  async send(conversaId, texto) {
+    texto = texto.trim().slice(0, 2000);
+    if (!texto) return null;
+    if (DEMO) {
+      const d = db(); const c = d.conversas.find((x) => x.id === conversaId);
+      const m = { id: uid(), conversa_id: conversaId, autor_id: auth.user.id, texto, lida: false, created_at: new Date().toISOString() };
+      d.mensagens.push(m); c.ultima_msg = texto; c.updated_at = m.created_at; save(d);
+      demoBus.forEach((fn) => fn(m));
+      const outro = c.cliente_id === auth.user.id ? c.corretor_id : c.cliente_id;
+      if (outro?.startsWith('p-')) setTimeout(() => demoReply(conversaId, outro), 1500 + Math.random() * 1200);
+      return m;
+    }
+    return must(await sb.from('mensagens').insert({ conversa_id: conversaId, autor_id: auth.user.id, texto }).select('*').single());
+  },
+  async markRead(conversaId) {
+    const me = auth.user.id;
+    if (DEMO) { const d = db(); d.mensagens.forEach((m) => { if (m.conversa_id === conversaId && m.autor_id !== me) m.lida = true; }); save(d); }
+    else await sb.from('mensagens').update({ lida: true }).eq('conversa_id', conversaId).neq('autor_id', me).eq('lida', false);
+    refreshUnread();
+  },
+  subscribe(fn) {
+    if (DEMO) { demoBus.add(fn); return () => demoBus.delete(fn); }
+    const ch = sb.channel('mensagens-' + uid().slice(0, 6))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, (p) => fn(p.new))
+      .subscribe();
+    return () => sb.removeChannel(ch);
+  },
+};
+
+function demoReply(conversaId, autor) {
+  const d = db(); const c = d.conversas.find((x) => x.id === conversaId); if (!c) return;
+  const im = d.imoveis.find((i) => i.id === c.imovel_id);
+  const nome = d.profiles.find((p) => p.id === autor)?.nome?.split(' ')[0] || 'Corretor';
+  const qtd = d.mensagens.filter((m) => m.conversa_id === conversaId && m.autor_id === autor).length;
+  const respostas = [
+    `Olá! Aqui é ${nome}, da Alvar. Que bom que se interessou por “${im?.titulo || 'este imóvel'}”. Como posso ajudar?`,
+    'Ótima pergunta! Posso te passar todos os detalhes e, se quiser, agendamos uma visita. Qual dia fica melhor para você?',
+    'Perfeito, anotado! Vou confirmar a disponibilidade e te retorno por aqui. 😊',
+  ];
+  const m = { id: uid(), conversa_id: conversaId, autor_id: autor, texto: respostas[Math.min(qtd, respostas.length - 1)], lida: false, created_at: new Date().toISOString() };
+  d.mensagens.push(m); c.ultima_msg = m.texto; c.updated_at = m.created_at; save(d);
+  demoBus.forEach((fn) => fn(m));
+}
+
+let unreadSub = null;
+export async function refreshUnread() {
+  const b = $('#msg-count'); if (!b) return;
+  if (!auth.user) { b.classList.remove('show'); return; }
+  let n = 0;
+  try {
+    if (DEMO) { const me = auth.user.id; const d = db(); const mine = new Set(d.conversas.filter((c) => c.cliente_id === me || c.corretor_id === me).map((c) => c.id)); n = d.mensagens.filter((m) => mine.has(m.conversa_id) && !m.lida && m.autor_id !== me).length; }
+    else { const { count } = await sb.from('mensagens').select('id', { count: 'exact', head: true }).eq('lida', false).neq('autor_id', auth.user.id); n = count || 0; }
+  } catch { n = 0; }
+  const changed = b.textContent !== String(n) && n > 0;
+  b.textContent = n; b.classList.toggle('show', n > 0);
+  if (changed) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+}
+function watchUnread() {
+  if (unreadSub) { unreadSub(); unreadSub = null; }
+  if (!auth.user) return;
+  unreadSub = chat.subscribe((m) => { if (m.autor_id !== auth.user?.id) setTimeout(refreshUnread, 300); });
+}
+
 // Redimensiona a imagem no navegador antes de enviar
 export function compress(file, max = 1600, quality = .82, as = 'blob') {
   return new Promise((resolve, reject) => {
@@ -436,6 +547,7 @@ export function renderChrome(active = '') {
       </nav>
       <div class="nav-actions">
         <button class="btn-icon" id="theme-btn"></button>
+        <a class="btn-icon fav-btn hide" id="msg-btn" href="./conta.html#chat" aria-label="Mensagens">${icon('chat')}<span class="badge" id="msg-count">0</span></a>
         <a class="btn-icon fav-btn" href="./conta.html#favoritos" aria-label="Favoritos">${icon('heart')}<span class="badge" id="fav-count">0</span></a>
         <div id="auth-slot"></div>
         <button class="btn-icon menu-toggle" id="menu-btn" aria-label="Menu">${icon('menu')}</button>
@@ -484,9 +596,13 @@ export function renderChrome(active = '') {
   onAuth(renderAuthSlot);
 }
 
+let lastWatched;
 function renderAuthSlot() {
   const slot = $('#auth-slot'); if (!slot) return;
   updateFavBadge();
+  $('#msg-btn')?.classList.toggle('hide', !auth.user);
+  if ((auth.user?.id || null) !== lastWatched) { lastWatched = auth.user?.id || null; watchUnread(); }
+  refreshUnread();
   if (!auth.user) {
     slot.innerHTML = `<button class="btn btn-sm" data-login>${icon('user')}<span>Entrar</span></button>`;
     bindLoginButtons(slot); return;
@@ -499,6 +615,7 @@ function renderAuthSlot() {
         <div class="who"><strong>${esc(p.nome || 'Minha conta')}</strong><span>${esc(p.email || auth.user.email || '')}</span><br><span class="role-pill">${esc(PAPEIS[p.papel] || 'Cliente')}</span></div>
         <a href="./conta.html#perfil">${icon('user')} Meu perfil</a>
         <a href="./conta.html#favoritos">${icon('heart')} Favoritos</a>
+        <a href="./conta.html#chat">${icon('chat')} Mensagens</a>
         ${isStaff() ? `<a href="./conta.html#imoveis">${icon('grid')} Meus imóveis</a><a href="./conta.html#novo">${icon('plus')} Cadastrar imóvel</a><a href="./conta.html#leads">${icon('inbox')} Interessados</a>` : ''}
         ${isAdmin() ? `<a href="./conta.html#equipe">${icon('users')} Gerenciar equipe</a>` : ''}
         <a href="./conta.html#seguranca">${icon('shield')} Segurança</a>
