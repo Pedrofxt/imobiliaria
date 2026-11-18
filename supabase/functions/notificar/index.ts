@@ -59,7 +59,7 @@ function layout(titulo: string, corpo: string, botao?: { texto: string; url: str
       </td></tr>
       <tr><td style="padding:16px 28px;background:#FBF8F4;font-size:12px;color:#6B726E">
         Você recebeu este aviso porque tem uma conta na Alvar Imóveis (marca fictícia).
-        <a href="${SITE}/conta.html#buscas" style="color:#6B726E">Gerenciar alertas</a>
+        <a href="${SITE}/conta/buscas" style="color:#6B726E">Gerenciar alertas</a>
       </td></tr>
     </table>
   </td></tr></table></body></html>`;
@@ -107,7 +107,7 @@ async function onMensagem(id: string) {
     layout(`${esc(primeiroNome(destino))}, você tem uma nova mensagem`,
       `<p><b>${esc(autor?.nome || "Alguém")}</b> escreveu sobre <b>${esc(c.imovel?.titulo || "um imóvel")}</b>:</p>
        <blockquote style="margin:14px 0;padding:12px 16px;background:#F6F2EC;border-left:3px solid #B8552F;border-radius:6px">${esc(m.texto).slice(0, 600)}</blockquote>`,
-      { texto: "Responder no chat", url: `${SITE}/conta.html?c=${c.id}#chat` }));
+      { texto: "Responder no chat", url: `${SITE}/conta/chat?c=${c.id}` }));
 }
 
 async function onLead(id: string) {
@@ -120,7 +120,7 @@ async function onLead(id: string) {
       `<p><b>${esc(l.nome)}</b> quer saber mais sobre <b>${esc(l.imovel.titulo)}</b>.</p>
        <p>E-mail: ${esc(l.email)}${l.telefone ? `<br>Telefone: ${esc(l.telefone)}` : ""}</p>
        ${l.mensagem ? `<blockquote style="margin:14px 0;padding:12px 16px;background:#F6F2EC;border-left:3px solid #B8552F;border-radius:6px">${esc(l.mensagem)}</blockquote>` : ""}`,
-      { texto: "Ver interessados", url: `${SITE}/conta.html#leads` }));
+      { texto: "Ver interessados", url: `${SITE}/conta/leads` }));
 }
 
 async function onVisita(id: string, evento: string) {
@@ -132,7 +132,7 @@ async function onVisita(id: string, evento: string) {
     await enviar(cor.email, `Pedido de visita: ${im}`,
       layout("Novo pedido de visita",
         `<p><b>${esc(cli?.nome || "Um interessado")}</b> quer visitar <b>${esc(im)}</b> em <b>${quando(v.data_hora)}</b>.</p>${v.observacao ? `<p>Observação: “${esc(v.observacao)}”</p>` : ""}`,
-        { texto: "Confirmar ou recusar", url: `${SITE}/conta.html#visitas` }));
+        { texto: "Confirmar ou recusar", url: `${SITE}/conta/visitas` }));
   }
   if (evento === "UPDATE" && ["confirmada", "recusada"].includes(v.status) && cli?.email) {
     const ok = v.status === "confirmada";
@@ -141,29 +141,29 @@ async function onVisita(id: string, evento: string) {
         ok
           ? `<p>${esc(primeiroNome(cli))}, ${esc(cor?.nome || "o corretor")} confirmou sua visita a <b>${esc(im)}</b> em <b>${quando(v.data_hora)}</b>.</p><p>Endereço: ${esc([v.imovel?.endereco, v.imovel?.bairro, v.imovel?.cidade].filter(Boolean).join(", "))}</p>`
           : `<p>${esc(primeiroNome(cli))}, o horário de ${quando(v.data_hora)} para <b>${esc(im)}</b> não está disponível. Escolha outro horário na página do imóvel.</p>`,
-        { texto: ok ? "Ver minhas visitas" : "Escolher outro horário", url: ok ? `${SITE}/conta.html#visitas` : `${SITE}/imovel.html?id=${v.imovel_id}#agendar` }));
+        { texto: ok ? "Ver minhas visitas" : "Escolher outro horário", url: ok ? `${SITE}/conta/visitas` : `${SITE}/imovel/${v.imovel_id}#agendar` }));
   }
   if (evento === "UPDATE" && v.status === "cancelada") {
     const alvo = cor; // avisa o corretor quando o interessado cancela
-    if (alvo?.email) await enviar(alvo.email, `Visita cancelada: ${im}`, layout("Visita cancelada", `<p>A visita de ${quando(v.data_hora)} para <b>${esc(im)}</b> foi cancelada.</p>`, { texto: "Ver agenda", url: `${SITE}/conta.html#visitas` }));
+    if (alvo?.email) await enviar(alvo.email, `Visita cancelada: ${im}`, layout("Visita cancelada", `<p>A visita de ${quando(v.data_hora)} para <b>${esc(im)}</b> foi cancelada.</p>`, { texto: "Ver agenda", url: `${SITE}/conta/visitas` }));
   }
 }
 
 async function onImovel(id: string, evento: string, anterior?: string) {
   const { data: im } = await db.from("imoveis").select("*, imovel_fotos(url,ordem)").eq("id", id).maybeSingle();
   if (!im) return;
-  const link = `${SITE}/imovel.html?id=${im.id}`;
+  const link = `${SITE}/imovel/${im.id}`;
   if (im.situacao === "pendente" && anterior !== "pendente") {
     const { data: admins } = await db.from("profiles").select("email").eq("papel", "admin");
     await enviar((admins || []).map((a) => a.email), `Anúncio aguardando aprovação: ${im.titulo}`,
       layout("Um anúncio aguarda sua aprovação", `<p><b>${esc(im.titulo)}</b> — ${esc(im.cidade)} · ${brl(im.preco)}</p>`,
-        { texto: "Revisar anúncios", url: `${SITE}/conta.html#imoveis` }));
+        { texto: "Revisar anúncios", url: `${SITE}/conta/imoveis` }));
   }
   if (im.situacao === "rejeitado" && anterior !== "rejeitado") {
     const dono = await perfil(im.criado_por || im.responsavel_id);
     if (dono?.email) await enviar(dono.email, `Anúncio precisa de ajustes: ${im.titulo}`,
       layout("Seu anúncio precisa de ajustes", `<p><b>${esc(im.titulo)}</b> não foi aprovado ainda.</p>${im.motivo_rejeicao ? `<p>Motivo: “${esc(im.motivo_rejeicao)}”</p>` : ""}`,
-        { texto: "Editar anúncio", url: `${SITE}/conta.html?editar=${im.id}#novo` }));
+        { texto: "Editar anúncio", url: `${SITE}/conta/novo?editar=${im.id}` }));
   }
   if (im.situacao === "publicado" && (evento === "INSERT" || anterior !== "publicado")) {
     if (anterior === "pendente") {
@@ -206,14 +206,14 @@ async function onSolicitacao(id: string) {
         `<p><b>${esc(pessoa?.nome || "Alguém")}</b> (${esc(pessoa?.email || "")}) quer anunciar imóveis na Alvar.</p>
          <p>CRECI: ${esc(s.creci)}${s.telefone ? `<br>Telefone: ${esc(s.telefone)}` : ""}</p>
          ${s.mensagem ? `<blockquote style="margin:14px 0;padding:12px 16px;background:#F6F2EC;border-left:3px solid #B8552F;border-radius:6px">${esc(s.mensagem)}</blockquote>` : ""}`,
-        { texto: "Aprovar ou recusar", url: `${SITE}/conta.html#aprovacoes` }));
+        { texto: "Aprovar ou recusar", url: `${SITE}/conta/aprovacoes` }));
   } else if (pessoa?.email) {
     const ok = s.status === "aprovada";
     await enviar(pessoa.email, ok ? "Seu acesso de corretor foi aprovado" : "Sobre seu pedido de acesso de corretor",
       layout(ok ? "Bem-vindo à equipe Alvar 🎉" : "Seu pedido não foi aprovado",
         ok ? `<p>${esc(primeiroNome(pessoa))}, seu acesso de corretor está liberado. Você já pode cadastrar imóveis.</p>`
            : `<p>${esc(primeiroNome(pessoa))}, a equipe não aprovou seu acesso de corretor desta vez. Você pode revisar os dados e pedir novamente na sua conta.</p>`,
-        { texto: ok ? "Cadastrar imóvel" : "Ver minha conta", url: ok ? `${SITE}/conta.html#novo` : `${SITE}/conta.html#perfil` }));
+        { texto: ok ? "Cadastrar imóvel" : "Ver minha conta", url: ok ? `${SITE}/conta/novo` : `${SITE}/conta/perfil` }));
   }
 }
 

@@ -369,11 +369,11 @@ svg.i { width: 1.1em; height: 1.1em; flex: none; stroke: currentColor; fill: non
 .account { display: grid; grid-template-columns: 260px 1fr; gap: 2.5rem; align-items: start; }
 @media (max-width: 900px) { .account { grid-template-columns: 1fr; } }
 .side-nav { position: sticky; top: 96px; display: grid; gap: .2rem; }
-.side-nav button { display: flex; align-items: center; gap: .7rem; padding: .8rem 1rem; border-radius: var(--radius-sm); font-weight: 500; color: var(--muted); text-align: left; transition: .25s; }
-.side-nav button:hover { color: var(--text); background: var(--bg-2); }
-.side-nav button.on { color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
-.side-nav button .count { margin-left: auto; font-size: .75rem; background: var(--accent-soft); color: var(--accent); padding: .1rem .5rem; border-radius: var(--r-btn); font-weight: 700; }
-@media (max-width: 900px) { .side-nav { position: static; display: flex; overflow-x: auto; scrollbar-width: none; } .side-nav button { white-space: nowrap; } }
+.side-nav button, .side-nav .side-link { display: flex; align-items: center; gap: .7rem; padding: .8rem 1rem; border-radius: var(--radius-sm); font-weight: 500; color: var(--muted); text-align: left; transition: .25s; }
+.side-nav button:hover, .side-nav .side-link:hover { color: var(--text); background: var(--bg-2); }
+.side-nav button.on, .side-nav .side-link.on { color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
+.side-nav button .count, .side-nav .side-link .count { margin-left: auto; font-size: .75rem; background: var(--accent-soft); color: var(--accent); padding: .1rem .5rem; border-radius: var(--r-btn); font-weight: 700; }
+@media (max-width: 900px) { .side-nav { position: static; display: flex; overflow-x: auto; scrollbar-width: none; } .side-nav button, .side-nav .side-link { white-space: nowrap; } }
 .profile-card { display: flex; gap: 1.2rem; align-items: center; padding: 1.4rem; margin-bottom: 1.5rem; }
 .tab { display: none; animation: fadeUp .5s var(--ease); }
 .tab.on { display: block; }
@@ -705,3 +705,7 @@ details summary { list-style: none; }
 .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 640px) { .config-grid { grid-template-columns: 1fr; } }
 .avatar.lg .logo-mark { width: 44px; height: 44px; color: #F6F2EC; }
+
+/* React */
+.map.leaflet-container { position: relative; z-index: 0; }
+.dropdown .mp-item { color: inherit; }

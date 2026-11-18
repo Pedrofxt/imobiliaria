@@ -2,7 +2,7 @@
 
 Site de imobiliária **fictícia** no estilo e-commerce: catálogo com filtros, favoritos (o "carrinho"), página de cada imóvel com galeria, dados e corretor responsável, área da conta para cadastrar imóveis e fotos, e página da equipe.
 
-- HTML, CSS e JavaScript puros (ES modules), sem build: roda direto no GitHub Pages
+- **React 18 + Vite**, com React Router — publicado no GitHub Pages por GitHub Actions
 - Supabase: banco Postgres com RLS, Storage para fotos e login com Google
 - Modo claro e escuro (com transição circular), responsivo, com animações
 
@@ -21,21 +21,33 @@ Site de imobiliária **fictícia** no estilo e-commerce: catálogo com filtros, 
 ## Estrutura
 
 ```
-index.html        início + catálogo
-imovel.html       página do imóvel (?id=…)
-conta.html        perfil, favoritos, meus imóveis, cadastrar, interessados, equipe (admin)
-equipe.html       corretores
-comparar.html     comparação lado a lado
-privacidade.html / termos.html
-css/style.css     estilos e tema
-js/config.js      URL e chave pública do Supabase
-js/core.js        cliente Supabase, auth, API de dados, componentes
-supabase/schema.sql   tabelas, RLS, triggers, bucket de fotos
-supabase/seed.sql     imóveis de exemplo (opcional)
-supabase/chat.sql, excluir-conta.sql, melhorias.sql, corretores.sql   atualizações (já incluídas no schema.sql)
-supabase/notificacoes.sql      gatilhos dos avisos por e-mail
-supabase/functions/notificar   Edge Function que envia os e-mails
+index.html                 página base (o React monta tudo aqui)
+src/main.jsx, App.jsx      entrada, rotas e layout
+src/lib/config.js          URL e chave pública do Supabase
+src/lib/core.js            camada de dados: Supabase, login, imóveis, chat, visitas…
+src/ui/kit.jsx             ícones, avatar, avisos, janelas, login
+src/components/            topo, rodapé, cartão de imóvel, mapa, barra de comparação
+src/pages/                 início, imóvel, comparar, equipe, termos/privacidade
+src/pages/conta/           área da conta (todas as abas)
+src/styles.css             visual do site
+public/assets/             logo, favicon e imagem de compartilhamento
+supabase/                  SQL do banco e a função de avisos por e-mail
+.github/workflows/         publicação automática no GitHub Pages
 ```
+
+Endereços: `/`, `/imovel/:id`, `/comparar`, `/equipe`, `/conta/:aba`, `/privacidade`, `/termos`. Links antigos (`imovel.html?id=…`, `conta.html#aba`) redirecionam sozinhos.
+
+## Rodar no computador
+
+```bash
+npm install
+npm run dev      # abre em http://localhost:5173/imobiliaria/
+npm run build    # gera a versão final em dist/
+```
+
+## Publicação
+
+Cada envio para a branch `main` dispara a GitHub Action que compila e publica o site. Na primeira vez, em **Settings → Pages**, escolha **Source: GitHub Actions**.
 
 ## Configurar o Supabase (uma vez)
 
@@ -84,4 +96,4 @@ As regras valem no banco (RLS), não só na interface.
 
 ## Modo demonstração
 
-Se `js/config.js` ficar com os valores de exemplo, o site roda com dados fictícios salvos no navegador e um login simulado de administrador. Serve para testar sem banco.
+Se `src/lib/config.js` ficar com os valores de exemplo, o site roda com dados fictícios salvos no navegador e um login simulado de administrador. Serve para testar sem banco.
