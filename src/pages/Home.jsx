@@ -4,6 +4,7 @@ import { api, auth, buscas, cover, matchFiltros, filtrosLabel, isPublicado, num,
 import { Icon, Img, Price, useModal, useToast, DbError, useStore } from '../ui/kit.jsx';
 import PropertyCard from '../components/PropertyCard.jsx';
 import { MapaImoveis } from '../components/LeafletMap.jsx';
+import Select from '../ui/Select.jsx';
 
 const HERO = 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2200&q=80';
 const TITULO = ['Encontre', 'o', 'lugar', 'onde', 'a', 'sua', <em key="h">história</em>, 'mora.'];
@@ -126,9 +127,9 @@ export default function Home() {
             </div>
             <label className="field-inline">
               <Icon name="home" />
-              <select aria-label="Tipo" value={heroTipo} onChange={(e) => setHeroTipo(e.target.value)}>
+              <Select aria-label="Tipo" value={heroTipo} onChange={(e) => setHeroTipo(e.target.value)}>
                 <option value="">Todos os tipos</option><option value="casa">Casa</option><option value="apartamento">Apartamento</option><option value="cobertura">Cobertura</option><option value="terreno">Terreno</option><option value="comercial">Comercial</option>
-              </select>
+              </Select>
             </label>
             <label className="field-inline"><Icon name="pin" /><input placeholder="Cidade, bairro ou palavra-chave" aria-label="Busca" value={heroQ} onChange={(e) => setHeroQ(e.target.value)} /></label>
             <button className="btn btn-accent" type="submit"><Icon name="search" /> Buscar</button>
@@ -183,18 +184,18 @@ export default function Home() {
               {[['', 'Todos'], ['venda', 'Comprar'], ['aluguel', 'Alugar']].map(([v, l]) => <button key={v} className={`chip ${F.fin === v ? 'on' : ''}`} onClick={() => setF({ fin: v })}>{l}</button>)}
             </div>
             <label className="field-inline"><Icon name="search" /><input placeholder="Buscar…" aria-label="Buscar" value={qLocal} onChange={(e) => setQLocal(e.target.value)} /></label>
-            <select className="select" aria-label="Tipo" value={F.tipo} onChange={(e) => setF({ tipo: e.target.value })}>
+            <Select className="select" aria-label="Tipo" value={F.tipo} onChange={(e) => setF({ tipo: e.target.value })}>
               <option value="">Tipo</option><option value="casa">Casa</option><option value="apartamento">Apartamento</option><option value="cobertura">Cobertura</option><option value="terreno">Terreno</option><option value="comercial">Comercial</option>
-            </select>
-            <select className="select" aria-label="Quartos" value={F.quartos} onChange={(e) => setF({ quartos: +e.target.value })}>
+            </Select>
+            <Select className="select" aria-label="Quartos" value={F.quartos} onChange={(e) => setF({ quartos: +e.target.value })}>
               <option value="0">Quartos</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option>
-            </select>
-            <select className="select" aria-label="Preço máximo" value={F.preco} onChange={(e) => setF({ preco: e.target.value })}>
+            </Select>
+            <Select className="select" aria-label="Preço máximo" value={F.preco} onChange={(e) => setF({ preco: e.target.value })}>
               <option value="">Preço máx.</option><option value="3000">até R$ 3 mil</option><option value="5000">até R$ 5 mil</option><option value="500000">até R$ 500 mil</option><option value="1000000">até R$ 1 mi</option><option value="2000000">até R$ 2 mi</option>
-            </select>
-            <select className="select" aria-label="Ordenar" value={F.ord} onChange={(e) => setF({ ord: e.target.value })}>
+            </Select>
+            <Select className="select" aria-label="Ordenar" value={F.ord} onChange={(e) => setF({ ord: e.target.value })}>
               <option value="recentes">Mais recentes</option><option value="menor">Menor preço</option><option value="maior">Maior preço</option><option value="area">Maior área</option>
-            </select>
+            </Select>
           </div>
 
           <div className="results-info">

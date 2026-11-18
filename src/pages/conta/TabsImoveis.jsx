@@ -4,6 +4,7 @@ import { api, auth, isAdmin, cover, loc, onlyDigits, geocode, TIPOS, FINALIDADES
 import { Icon, Img, Price, Spinner, DbError, useToast, useModal } from '../../ui/kit.jsx';
 import { MapaSeletor } from '../../components/LeafletMap.jsx';
 import { TabHead } from './TabsBasicas.jsx';
+import Select from '../../ui/Select.jsx';
 
 const sit = (i) => i.situacao || 'publicado';
 
@@ -176,9 +177,9 @@ function Formulario({ equipe, im }) {
           <h3 style={{ fontSize: '1.3rem' }}>Informações principais</h3>
           <div className="field"><label>Título do anúncio *</label><input required maxLength={120} value={f.titulo} onChange={set('titulo')} placeholder="Ex.: Casa com piscina e vista para a baía" /></div>
           <div className="form-row" style={{ '--cols': 3 }}>
-            <div className="field"><label>Finalidade</label><select value={f.finalidade} onChange={set('finalidade')}>{opt(FINALIDADES)}</select></div>
-            <div className="field"><label>Tipo</label><select value={f.tipo} onChange={set('tipo')}>{opt(TIPOS)}</select></div>
-            <div className="field"><label>Status</label><select value={f.status} onChange={set('status')}>{opt(STATUS)}</select></div>
+            <div className="field"><label>Finalidade</label><Select value={f.finalidade} onChange={set('finalidade')}>{opt(FINALIDADES)}</Select></div>
+            <div className="field"><label>Tipo</label><Select value={f.tipo} onChange={set('tipo')}>{opt(TIPOS)}</Select></div>
+            <div className="field"><label>Status</label><Select value={f.status} onChange={set('status')}>{opt(STATUS)}</Select></div>
           </div>
           <div className="form-row" style={{ '--cols': 3 }}>
             <div className="field"><label>{f.finalidade === 'aluguel' ? 'Aluguel mensal (R$) *' : 'Preço de venda (R$) *'}</label><input type="number" min="0" step="1" required value={f.preco} onChange={set('preco')} /></div>
@@ -254,10 +255,10 @@ function Formulario({ equipe, im }) {
         <div className="panel form">
           <h3 style={{ fontSize: '1.3rem' }}>Responsável pelo imóvel</h3>
           <div className="field"><label>Corretor responsável</label>
-            <select value={f.responsavel_id} onChange={set('responsavel_id')}>
+            <Select value={f.responsavel_id} onChange={set('responsavel_id')}>
               {equipe.map((p) => <option key={p.id} value={p.id}>{p.nome || p.email}{p.creci ? ' — ' + p.creci : ''}</option>)}
               <option value="">Sem corretor definido (contato geral da Alvar)</option>
-            </select>
+            </Select>
           </div>
           {!equipe.length && <p className="notice" style={{ margin: 0, fontSize: '.86rem' }}>Ainda não há corretores aprovados. Aprove um em <b>Aprovações</b> ou mude o papel de alguém em <b>Equipe</b>.</p>}
           <p className="muted" style={{ fontSize: '.85rem', margin: 0 }}>Ele aparece na página do imóvel e recebe os interessados.</p>

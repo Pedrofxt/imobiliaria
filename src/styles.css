@@ -714,3 +714,25 @@ details summary { list-style: none; }
 select { color-scheme: inherit; }
 select option, select optgroup { background-color: var(--surface); color: var(--text); }
 [data-theme="dark"] select { color-scheme: dark; }
+
+/* ---------- lista de seleção própria (segue o tema claro/escuro) ---------- */
+.dd-btn { display: flex; align-items: center; justify-content: space-between; gap: .6rem; width: 100%; text-align: left; cursor: pointer; color: var(--text); font: inherit; }
+.dd-btn:disabled { opacity: .55; cursor: not-allowed; }
+.dd-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-chev { width: 14px; height: 14px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s var(--ease); }
+.dd-btn.open .dd-chev { transform: rotate(180deg); }
+/* dentro de formulários: mesmo visual dos campos */
+.field .dd-btn { padding: .8rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface-2); font-size: .95rem; min-height: 48px; transition: border-color .25s, box-shadow .25s; }
+.field .dd-btn:focus-visible, .field .dd-btn.open { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+/* na busca do topo: sem moldura */
+.field-inline .dd-btn { padding: .8rem 0; background: transparent; border: 0; font-size: .95rem; outline: 0; }
+/* filtros do catálogo e tabelas: pílula com seta */
+.dd-btn.select { width: auto; display: inline-flex; color: var(--text); }
+.dd-btn.select.open, .dd-btn.select:focus-visible { outline: 0; border-color: var(--text); }
+.dd-menu { position: fixed; z-index: 140; margin: 0; padding: .35rem; list-style: none; overflow-y: auto; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); animation: ddIn .18s var(--ease); }
+@keyframes ddIn { from { opacity: 0; transform: translateY(-4px); } }
+.dd-opt { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .6rem .75rem; border-radius: 6px; font-size: .92rem; cursor: pointer; white-space: nowrap; }
+.dd-opt.active { background: var(--bg-2); }
+.dd-opt.sel { color: var(--accent); font-weight: 600; }
+.dd-opt.off { opacity: .45; cursor: not-allowed; }
+.dd-opt svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }

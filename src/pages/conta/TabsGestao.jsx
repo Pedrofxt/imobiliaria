@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, auth, chat, visitas, buscas, corretores, isAdmin, isPublicado, matchFiltros, filtrosLabel, onlyDigits, fmtDate, loc, num, DEMO, VISITA_STATUS, ETAPAS, PAPEIS } from '../../lib/core.js';
 import { Icon, Avatar, DbError, useToast, useModal } from '../../ui/kit.jsx';
 import { TabHead } from './TabsBasicas.jsx';
+import Select from '../../ui/Select.jsx';
 
 const wa = (tel) => { const t = onlyDigits(tel); return t ? `https://wa.me/${t.startsWith('55') ? t : '55' + t}` : null; };
 const Skel = ({ h = 120 }) => <div className="skeleton" style={{ height: h }} />;
@@ -188,7 +189,7 @@ export function Leads() {
               <td><strong>{l.nome}</strong><br /><a className="muted" href={`mailto:${l.email}`}>{l.email}</a>{wa(l.telefone) && <><br /><a className="muted" href={wa(l.telefone)} target="_blank" rel="noopener">{l.telefone}</a></>}</td>
               <td>{l.imovel ? <Link to={`/imovel/${encodeURIComponent(l.imovel.id)}`} style={{ color: 'var(--accent)' }}>{l.imovel.titulo}</Link> : <span className="muted">removido</span>}</td>
               <td style={{ maxWidth: 300 }}>{l.mensagem}</td>
-              <td><select className="select" aria-label="Etapa" value={l.etapa} onChange={(e) => mudar(l, e.target.value)}>{Object.entries(ETAPAS).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}</select></td>
+              <td><Select className="select" aria-label="Etapa" value={l.etapa} onChange={(e) => mudar(l, e.target.value)}>{Object.entries(ETAPAS).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}</Select></td>
               <td><button className="btn-icon" aria-label="Excluir" onClick={async () => { if (!(await modal.confirm('Remover este contato da lista?', 'Remover'))) return; try { await api.deleteLead(l.id); carregar(); } catch (e) { toast(e.message, 'err'); } }}><Icon name="trash" /></button></td>
             </tr>
           ))}</tbody></table></div>
@@ -273,8 +274,8 @@ export function EquipeAdmin({ cfg, setCfg, refreshCounts }) {
         <h3 style={{ fontSize: '1.3rem' }}>Aprovação de novos corretores</h3>
         <p className="muted" style={{ margin: 0, fontSize: '.9rem' }}>Quem escolhe “Corretor” ao entrar fica como visitante até ser aprovado. Seu voto de administrador sempre decide na hora.</p>
         <div className="config-grid">
-          <div className="field"><label>Quem pode aprovar</label><select value={regras.quem_aprova} onChange={(e) => setRegras({ ...regras, quem_aprova: e.target.value })}><option value="equipe">Corretores e administradores</option><option value="admin">Somente administradores</option></select></div>
-          <div className="field"><label>Aprovações necessárias</label><select value={regras.aprovacoes_necessarias} onChange={(e) => setRegras({ ...regras, aprovacoes_necessarias: +e.target.value })}>{[1, 2, 3, 4, 5].map((k) => <option key={k} value={k}>{k} {k === 1 ? 'aprovação' : 'aprovações'}</option>)}</select></div>
+          <div className="field"><label>Quem pode aprovar</label><Select value={regras.quem_aprova} onChange={(e) => setRegras({ ...regras, quem_aprova: e.target.value })}><option value="equipe">Corretores e administradores</option><option value="admin">Somente administradores</option></Select></div>
+          <div className="field"><label>Aprovações necessárias</label><Select value={regras.aprovacoes_necessarias} onChange={(e) => setRegras({ ...regras, aprovacoes_necessarias: +e.target.value })}>{[1, 2, 3, 4, 5].map((k) => <option key={k} value={k}>{k} {k === 1 ? 'aprovação' : 'aprovações'}</option>)}</Select></div>
         </div>
         <div><button className="btn btn-sm" onClick={salvarRegras}><Icon name="check" /> Salvar regras</button></div>
       </div>
@@ -286,7 +287,7 @@ export function EquipeAdmin({ cfg, setCfg, refreshCounts }) {
             <tr key={u.id}>
               <td><div className="agent"><Avatar p={u} /><div><strong>{u.nome || '—'}</strong><span>{u.email || ''}</span></div></div></td>
               <td>{u.tipo_conta === 'corretor' ? (u.papel === 'cliente' ? <span className="pill pendente">Corretor (aguardando)</span> : <span className="pill publicado">Corretor</span>) : u.tipo_conta === 'visitante' ? <span className="pill rascunho">Visitante</span> : <span className="muted" style={{ fontSize: '.8rem' }}>—</span>}</td>
-              <td><select className="select" value={u.papel} disabled={u.id === auth.user.id} title={u.id === auth.user.id ? 'Você não pode alterar o próprio papel' : undefined} onChange={(e) => editar(u.id, 'papel', e.target.value)}>{Object.entries(PAPEIS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
+              <td><Select className="select" value={u.papel} disabled={u.id === auth.user.id} title={u.id === auth.user.id ? 'Você não pode alterar o próprio papel' : undefined} onChange={(e) => editar(u.id, 'papel', e.target.value)}>{Object.entries(PAPEIS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></td>
               <td><input className="input" value={u.cargo || ''} placeholder="Cargo" style={{ minWidth: 160 }} onChange={(e) => editar(u.id, 'cargo', e.target.value)} /></td>
               <td><input className="input" value={u.creci || ''} placeholder="CRECI" style={{ minWidth: 130 }} onChange={(e) => editar(u.id, 'creci', e.target.value)} /></td>
               <td><button className="btn btn-sm" onClick={() => salvar(u)}>Salvar</button></td>
