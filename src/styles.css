@@ -709,3 +709,8 @@ details summary { list-style: none; }
 /* React */
 .map.leaflet-container { position: relative; z-index: 0; }
 .dropdown .mp-item { color: inherit; }
+
+/* listas de seleção (tipo, quartos, preço…) legíveis nos dois temas */
+select { color-scheme: inherit; }
+select option, select optgroup { background-color: var(--surface); color: var(--text); }
+[data-theme="dark"] select { color-scheme: dark; }
